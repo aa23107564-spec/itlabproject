@@ -1,0 +1,50 @@
+/* 4:3 螢幕比例固定樣式 - 支援全螢幕 */
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden; /* 防止滾動 */
+  background-color: #000; /* 黑邊背景 */
+}
+
+#root {
+  /* 支援 4:3 全螢幕模式 */
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #000;
+}
+
+/* 4:3 容器 - 支援全螢幕填滿 */
+.app-container {
+  /* 基準尺寸 */
+  width: 1024px;
+  height: 768px;
+  position: relative;
+  background-color: #f5f5f5;
+  
+  /* 在 4:3 螢幕上全螢幕填滿 */
+  max-width: 100vw;
+  max-height: 100vh;
+}
+
+/* 確保所有組件都在固定容器內 */
+.App {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden; /* 防止內容超出容器 */
+}
+
+/* 確保所有絕對定位元素都在容器範圍內 */
+.App > * {
+  max-width: 100%;
+  max-height: 100%;
+}

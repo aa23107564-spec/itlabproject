@@ -1,0 +1,417 @@
+/* ===== Word 2003 Static UI (1024x768, no interaction) ===== */
+:root {
+  --xp-title-blue: #245EDC;
+  --xp-border-blue: #1C4A8C;
+  --panel-beige: #ECE9D8;
+  --panel-surface: #F3F3F3;
+  --panel-line: #C6C6C6;
+  --workspace-gray: #6B6B6B;
+  --status-bg: #E3E3E3;
+  --status-line: #B5B5B5;
+  --paper-white: #FFFFFF;
+  --paper-outline: #D6D6D6;
+  --text-color: #222;
+  --ui-font: Tahoma, "Microsoft JhengHei", Arial, sans-serif;
+}
+
+/* 固定畫布：1024x768，不響應式 */
+.word2003-canvas {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  position: relative;
+  background: #6B6B6B;
+  font-family: var(--ui-font);
+  color: var(--text-color);
+  user-select: none;
+  overflow: hidden; /* 禁止捲動與溢出 */
+}
+
+/* 視窗外框與標題列 */
+.word2003-window {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--xp-border-blue);
+  background: #fff;
+  width: 100%;
+  height: 100%;
+}
+
+.word2003-titlebar {
+  height: 28px;
+  background: var(--xp-title-blue);
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  color: #fff;
+}
+
+.word2003-titlebar .win-icon {
+  width: 20px;
+  height: 20px;
+  background: #1E4AA0;
+  color: #fff;
+  font-size: 13px;
+  line-height: 20px;
+  text-align: center;
+  border-radius: 2px;
+  margin-right: 8px;
+  font-weight: 700;
+}
+
+.word2003-titlebar .title-text {
+  font-weight: 700;
+  font-size: 13px;
+  flex: 1;
+}
+
+.word2003-titlebar .system-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.word2003-titlebar .sys-btn {
+  width: 16px;
+  height: 16px;
+  background: #3A6EA5;
+  border: 1px solid #1C4A8C;
+  color: #eaf2ff;
+  font-size: 10px;
+  line-height: 14px;
+  text-align: center;
+}
+
+.word2003-titlebar .sys-btn.close-btn {
+  background: #C42B1C;
+  border: 1px solid #8B1A0F;
+  color: #fff;
+}
+
+/* 分隔線 */
+.word2003-sep {
+  height: 1px;
+  background: #1C4A8C;
+}
+
+/* 功能表列（無 hover） */
+.word2003-menubar {
+  height: 24px;
+  background: var(--panel-beige);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  gap: 16px;
+  border-bottom: 1px solid #d2d0c9;
+}
+
+.word2003-menubar .menu-item {
+  font-size: 12px;
+  color: #222;
+}
+
+/* 工具列區 */
+.word2003-toolbars {
+  background: var(--panel-beige);
+  border-bottom: 1px solid #d2d0c9;
+}
+
+.word2003-toolbar-row {
+  height: 32px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  gap: 8px;
+  border-top: 1px solid #dfddd5;
+}
+
+.word2003-toolbtn {
+  width: 20px;
+  height: 20px;
+  background: var(--panel-surface);
+  border: 1px solid var(--panel-line);
+  box-shadow: 0 1px 0 #fff inset, 0 -1px 0 #bdbdbd inset;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.word2003-toolbtn.is-disabled {
+  opacity: .5;
+}
+
+.word2003-select {
+  height: 20px;
+  background: var(--panel-surface);
+  border: 1px solid var(--panel-line);
+  padding: 0 6px;
+  font-size: 12px;
+  line-height: 20px;
+  min-width: 120px;
+}
+
+.word2003-select.small {
+  min-width: 48px;
+}
+
+/* 工作區與白紙頁 */
+.word2003-workspace {
+  flex: 1;
+  background: var(--workspace-gray);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* 垂直捲軸 */
+.word2003-scrollbar {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 16px;
+  height: 100%;
+  background: #f0f0f0;
+  border-left: 1px solid #c0c0c0;
+}
+
+.word2003-scrollbar-track {
+  width: 100%;
+  height: 100%;
+  background: #f0f0f0;
+  position: relative;
+}
+
+.word2003-scrollbar-thumb {
+  position: absolute;
+  top: 20px;
+  left: 2px;
+  right: 2px;
+  height: calc(50% - 40px);
+  background: #c0c0c0;
+  border: 1px solid #a0a0a0;
+  border-radius: 2px;
+}
+
+.word2003-scrollbar-arrow-up {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 16px;
+  background: #f0f0f0;
+  border-bottom: 1px solid #c0c0c0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: #666;
+}
+
+.word2003-scrollbar-arrow-down {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 16px;
+  background: #f0f0f0;
+  border-top: 1px solid #c0c0c0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: #666;
+}
+
+/* 上方間隔（深灰背景） */
+.word2003-workspace-spacer {
+  height: 40px;
+  width: 100%;
+  background: var(--workspace-gray);
+}
+
+.word2003-paper {
+  width: 720px;
+  height: 600px; /* 調整高度以配合上方間隔 */
+  background: var(--paper-white);
+  border: 1px solid var(--paper-outline);
+  box-shadow: 0 6px 18px rgba(0,0,0,.18);
+  padding: 48px;
+  position: relative;
+}
+
+.word2003-paper .hint-line {
+  width: 100%;
+  height: 1px;
+  background: #eee;
+  margin: 16px 0;
+  position: relative;
+}
+
+/* 邊界直角記號 */
+.word2003-paper .corner-mark {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 1px solid #ccc;
+  border-right: none;
+  border-bottom: none;
+}
+
+.word2003-paper .corner-mark.top-left {
+  top: 8px;
+  left: 8px;
+}
+
+.word2003-paper .corner-mark.top-right {
+  top: 8px;
+  right: 8px;
+  border-left: none;
+  border-right: 1px solid #ccc;
+}
+
+/* 回車符號 */
+.word2003-paper .paragraph-mark {
+  color: #666;
+  font-size: 12px;
+  opacity: 0.8;
+  font-family: monospace;
+  margin-left: 0;
+}
+
+/* 狀態列 */
+.word2003-statusbar {
+  height: 22px;
+  background: var(--status-bg);
+  border-top: 1px solid #d0d0d0;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  gap: 12px;
+  font-size: 12px;
+}
+
+.word2003-status-seg {
+  padding: 0 8px;
+  border-right: 1px solid var(--status-line);
+}
+
+.word2003-status-seg:last-child {
+  border-right: none;
+}
+
+/* 關閉 hover/active/focus 視覺 */
+a:hover, button:hover, .nav-link:hover,
+a:active, button:active, .nav-link:active,
+a:focus, button:focus, .nav-link:focus {
+  color: inherit !important;
+  background: inherit !important;
+  box-shadow: none !important;
+  outline: none !important;
+  text-decoration: none !important;
+}
+
+/* 遊戲文字容器 */
+.word-game-text-container {
+  width: 100%;
+  height: 100%;
+  padding: 20px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #333;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  position: relative;
+}
+
+/* 可互動詞彙 */
+.interactive-word {
+  text-decoration: underline;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.interactive-word.selected {
+  background-color: #0078d4;
+  color: white;
+  text-decoration: none;
+}
+
+.interactive-word.selected .cursor-on-word {
+  text-decoration: none !important;
+  background: none !important;
+}
+
+/* 游標閃爍 */
+.cursor-blink {
+  animation: blink 1s infinite;
+  color: #333;
+  font-weight: bold;
+}
+
+/* 靜態游標（打字時） */
+.cursor-static {
+  color: #333;
+  font-weight: bold;
+}
+
+/* 游標在詞彙上時的特殊樣式 */
+.cursor-on-word {
+  color: #333;
+  font-weight: bold;
+  margin-left: 1px;
+  text-decoration: none !important;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* 選詞選單 */
+.word-choice-menu {
+  position: absolute;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  padding: 8px;
+  z-index: 1000;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 200px;
+}
+
+.word-choice-item {
+  display: flex;
+  align-items: center;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: background-color 0.2s;
+}
+
+.word-choice-item.selected {
+  background-color: #0078d4;
+  color: white;
+}
+
+.word-choice-number {
+  color: red;
+  font-weight: bold;
+  margin-right: 4px;
+}
+
+.word-choice-item.selected .word-choice-number {
+  color: white;
+}
+
+.word-choice-text {
+  color: blue;
+}
+
+.word-choice-item.selected .word-choice-text {
+  color: white;
+}
