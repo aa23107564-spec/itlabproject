@@ -348,20 +348,25 @@ a:focus, button:focus, .nav-link:focus {
   animation: blink 1s infinite;
   color: #333;
   font-weight: bold;
+  position: absolute;
+  margin-left: -4px;
 }
 
 /* 靜態游標（打字時） */
 .cursor-static {
   color: #333;
   font-weight: bold;
+  position: absolute;
+  margin-left: -4px;
 }
 
 /* 游標在詞彙上時的特殊樣式 */
 .cursor-on-word {
   color: #333;
   font-weight: bold;
-  margin-left: 1px;
+  margin-left: -2px;
   text-decoration: none !important;
+  position: absolute;
 }
 
 @keyframes blink {
@@ -376,21 +381,23 @@ a:focus, button:focus, .nav-link:focus {
   border: 1px solid #ddd;
   border-radius: 4px;
   box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-  padding: 8px;
+  padding: 4px;
   z-index: 1000;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  min-width: 200px;
+  gap: 4px;
+  min-width: 120px;
+  font-size: 12px;
 }
 
 .word-choice-item {
   display: flex;
   align-items: center;
-  padding: 4px 8px;
+  padding: 2px 6px;
   cursor: pointer;
   border-radius: 2px;
   transition: background-color 0.2s;
+  font-size: 12px;
 }
 
 .word-choice-item.selected {
@@ -401,7 +408,8 @@ a:focus, button:focus, .nav-link:focus {
 .word-choice-number {
   color: red;
   font-weight: bold;
-  margin-right: 4px;
+  margin-right: 2px;
+  font-size: 11px;
 }
 
 .word-choice-item.selected .word-choice-number {
@@ -410,8 +418,19 @@ a:focus, button:focus, .nav-link:focus {
 
 .word-choice-text {
   color: blue;
+  font-size: 12px;
 }
 
 .word-choice-item.selected .word-choice-text {
   color: white;
+}
+
+/* 完成提示 */
+.complete-hint {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  color: #999;
+  font-size: 12px;
+  font-style: italic;
 }

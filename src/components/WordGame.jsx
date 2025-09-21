@@ -53,6 +53,8 @@ export default function WordGame() {
   const [selectedChoice, setSelectedChoice] = useState(0);
   const [wordChoices, setWordChoices] = useState([]);
   const [gameState, setGameState] = useState('typing'); // typing, selecting, choosing, completing
+  const [replacedWords, setReplacedWords] = useState({}); // 儲存已替換的詞彙
+  const [showCompleteHint, setShowCompleteHint] = useState(false); // 顯示完成提示
   
   const textContainerRef = useRef(null);
   const cursorRef = useRef(null);
@@ -84,6 +86,8 @@ export default function WordGame() {
       setGameState('typing');
       setSelectedWordId(null);
       setShowChoiceMenu(false);
+      setReplacedWords({}); // 重置替換的詞彙
+      setShowCompleteHint(false); // 重置完成提示
     }
   };
 
@@ -104,10 +108,24 @@ export default function WordGame() {
             const newIndex = currentIndex < interactiveWords.length - 1 ? currentIndex + 1 : -1;
             setSelectedWordId(newIndex === -1 ? null : interactiveWords[newIndex].id);
           }
+          
+          // 檢查是否在段尾
+          const isAtEnd = selectedWordId === null;
+          setShowCompleteHint(isAtEnd);
         } else if (e.key === 'ArrowDown' && selectedWordId) {
           // 開啟選詞選單
           const word = gameData[currentParagraph].interactiveWords.find(w => w.id === selectedWordId);
-          setWordChoices(word.options);
+          const currentWord = replacedWords[selectedWordId] || word.word;
+          
+          // 重新排列選項，將當前顯示的詞彙放在第一位
+          const reorderedOptions = [currentWord];
+          word.options.forEach(option => {
+            if (option !== currentWord) {
+              reorderedOptions.push(option);
+            }
+          });
+          
+          setWordChoices(reorderedOptions);
           setShowChoiceMenu(true);
           setSelectedChoice(0);
           setGameState('choosing');
@@ -119,10 +137,20 @@ export default function WordGame() {
           setSelectedChoice(prev => prev < wordChoices.length - 1 ? prev + 1 : 0);
         } else if (e.key === 'ArrowDown') {
           // 確認選擇
+          const selectedWord = gameData[currentParagraph].interactiveWords.find(w => w.id === selectedWordId);
+          const newWord = wordChoices[selectedChoice];
+          
+          // 更新替換的詞彙
+          setReplacedWords(prev => ({
+            ...prev,
+            [selectedWordId]: newWord
+          }));
+          
           setShowChoiceMenu(false);
           setGameState('selecting');
         }
-      } else if (gameState === 'completing' && e.key === 'ArrowDown') {
+      } else if (gameState === 'selecting' && e.key === 'ArrowDown' && !selectedWordId) {
+        // 在段尾按下下鍵，進入下一段
         startNewParagraph();
       }
     };
@@ -156,7 +184,8 @@ export default function WordGame() {
         }
         
         // 添加可互動詞彙
-        const wordText = text.substring(word.startIndex, word.endIndex);
+        const originalWordText = text.substring(word.startIndex, word.endIndex);
+        const displayWordText = replacedWords[word.id] || originalWordText;
         const isSelected = selectedWordId === word.id;
         elements.push(
           <span 
@@ -164,9 +193,9 @@ export default function WordGame() {
             data-word-id={word.id}
             className={`interactive-word ${isSelected ? 'selected' : ''}`}
           >
-            {wordText}
+            {displayWordText}
             {isSelected && !isTyping && gameState === 'selecting' && (
-              <span className="cursor-blink cursor-on-word">|</span>
+              <span className="cursor-blink cursor-on-word" style={{ position: 'absolute', marginLeft: '-2px' }}>|</span>
             )}
           </span>
         );
@@ -197,13 +226,13 @@ export default function WordGame() {
       const rect = wordElement.getBoundingClientRect();
       const containerRect = textContainerRef.current.getBoundingClientRect();
       
-      // 基本位置：詞彙下方
-      let top = rect.bottom - containerRect.top + 5;
-      let left = rect.left - containerRect.left;
+       // 基本位置：詞彙下方，上緣與藍底白字下緣間隔3px
+       let top = rect.bottom - containerRect.top + 3;
+       let left = rect.left - containerRect.left;
       
-      // 檢查是否超出容器邊界
-      const menuWidth = 200; // 選單預估寬度
-      const menuHeight = 50; // 選單預估高度
+       // 檢查是否超出容器邊界
+       const menuWidth = 120; // 縮小後的選單寬度
+       const menuHeight = 30; // 縮小後的選單高度
       
       // 如果右側超出，調整到左側
       if (left + menuWidth > containerRect.width) {
@@ -298,10 +327,17 @@ export default function WordGame() {
             >
               {renderText()}
               {isTyping && (
-                <span className="cursor-static">|</span>
+                <span className="cursor-static" style={{ position: 'absolute', marginLeft: '-4px' }}>|</span>
               )}
               {!isTyping && gameState === 'selecting' && !selectedWordId && (
-                <span className="cursor-blink">|</span>
+                <span className="cursor-blink" style={{ position: 'absolute', marginLeft: '-4px' }}>|</span>
+              )}
+              
+              {/* 完成提示 */}
+              {showCompleteHint && (
+                <div className="complete-hint">
+                  確認以完成段落
+                </div>
               )}
             </div>
             
