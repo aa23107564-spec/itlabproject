@@ -81,9 +81,6 @@ export default function Word2003Mock() {
             <div className="hint-line">
               <span className="paragraph-mark">↵</span>
             </div>
-            <div style={{ fontSize: 14, color: "#666", position: "relative" }}>
-              （此區為靜態白紙頁示意，無法編輯，僅展示版面。）<span className="paragraph-mark">↵</span>
-            </div>
           </div>
           
           {/* 垂直捲軸 */}

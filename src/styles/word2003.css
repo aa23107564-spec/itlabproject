@@ -323,12 +323,12 @@ a:focus, button:focus, .nav-link:focus {
   word-wrap: break-word;
   overflow-wrap: break-word;
   position: relative;
+  font-family: "MingLiU", "明體", serif;
 }
 
 /* 可互動詞彙 */
 .interactive-word {
   text-decoration: underline;
-  cursor: pointer;
   transition: background-color 0.2s;
 }
 
@@ -348,12 +348,16 @@ a:focus, button:focus, .nav-link:focus {
   animation: blink 1s infinite;
   color: #333;
   font-weight: bold;
+  font-size: 16px;
+  line-height: 1.2;
 }
 
 /* 靜態游標（打字時） */
 .cursor-static {
   color: #333;
   font-weight: bold;
+  font-size: 16px;
+  line-height: 1.2;
 }
 
 /* 游標在詞彙上時的特殊樣式 */
@@ -362,6 +366,8 @@ a:focus, button:focus, .nav-link:focus {
   font-weight: bold;
   margin-left: -4px;
   text-decoration: none !important;
+  font-size: 16px;
+  line-height: 1.2;
 }
 
 @keyframes blink {
@@ -373,16 +379,17 @@ a:focus, button:focus, .nav-link:focus {
 .word-choice-menu {
   position: absolute;
   background: white;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  border: none;
+  border-radius: 0;
+  box-shadow: 1px 1px 0px #000;
   padding: 4px;
   z-index: 1000;
-  display: flex;
-  flex-wrap: wrap;
+  display: inline-flex;
+  flex-wrap: nowrap;
   gap: 4px;
-  min-width: 120px;
   font-size: 12px;
+  font-family: "MingLiU", "明體", serif;
+  width: auto;
 }
 
 .word-choice-item {
@@ -390,9 +397,12 @@ a:focus, button:focus, .nav-link:focus {
   align-items: center;
   padding: 2px 6px;
   cursor: pointer;
-  border-radius: 2px;
+  border-radius: 0;
   transition: background-color 0.2s;
   font-size: 12px;
+  font-family: "MingLiU", "明體", serif;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .word-choice-item.selected {
@@ -401,10 +411,11 @@ a:focus, button:focus, .nav-link:focus {
 }
 
 .word-choice-number {
-  color: red;
+  color: #ff0000;
   font-weight: bold;
   margin-right: 2px;
-  font-size: 11px;
+  font-size: 12px;
+  font-family: "DFKai-SB", "標楷體", serif;
 }
 
 .word-choice-item.selected .word-choice-number {
@@ -412,8 +423,9 @@ a:focus, button:focus, .nav-link:focus {
 }
 
 .word-choice-text {
-  color: blue;
+  color: #0000ff;
   font-size: 12px;
+  font-family: "MingLiU", "明體", serif;
 }
 
 .word-choice-item.selected .word-choice-text {
@@ -422,13 +434,73 @@ a:focus, button:focus, .nav-link:focus {
 
 /* 完成提示 */
 .complete-hint {
-  position: absolute;
   color: #999;
   font-size: 12px;
-  font-style: italic;
+  font-style: normal;
+  font-weight: normal;
+  font-family: "Microsoft YaHei", "黑體", sans-serif;
   text-align: center;
   width: 100%;
-  top: 100px;
-  left: 0;
-  margin-top: 20px;
+  margin-top: 35px;
+  letter-spacing: 1px;
+  animation: fadeInOut 3s cubic-bezier(0.25, 0.46, 0.45, 0.94) infinite;
+}
+
+@keyframes fadeInOut {
+  0% { opacity: 0; }
+  30%, 70% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* 已完成的段落 */
+.completed-paragraph {
+  margin-bottom: 12px;
+  color: #333;
+  line-height: 1.6;
+}
+
+.completed-paragraph .completed-word {
+  color: #333;
+  font-weight: normal;
+  text-decoration: none;
+  background-color: transparent;
+}
+
+/* 當前段落 */
+.current-paragraph {
+  position: relative;
+}
+
+/* 文字邊界直角標示 */
+.text-boundary-mark {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border: 1px solid #999;
+  z-index: 10;
+}
+
+.text-boundary-mark.top-left {
+  top: 2px;
+  left: -1px;
+  border-right: none;
+  border-bottom: none;
+  transform: rotate(180deg);
+}
+
+.text-boundary-mark.top-right {
+  top: 2px;
+  right: 2px;
+  border-left: none;
+  border-bottom: none;
+  transform: rotate(-180deg);
+}
+
+/* 段落回車符號 */
+.paragraph-mark {
+  color: #666;
+  font-size: 12px;
+  opacity: 0.8;
+  font-family: monospace;
+  margin-left: 0;
 }

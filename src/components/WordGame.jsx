@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import '../styles/word2003.css';
 
 // 遊戲數據
@@ -29,7 +29,7 @@ const gameData = [
     id: 4,
     text: "「認真聽我接下來要說的，」綠子的耳朵，比一般人占據頭部的面積比例大了些，不知是否因為這樣時常被稱作機靈，但耳朵大等於腦子好是什麼道理？因為耳朵是最不善欺騙的器官嗎？有「視錯覺」這個詞彙，但好像從未聽過有人提過「聽錯覺」什麼的。總之我大概是屬於耳朵小的人，連自身的感官經驗都在欺騙自己，這是我這種人一輩子都沒有機會明白的那種道理吧。",
     interactiveWords: [
-      { id: 1, word: "耳朵", startIndex: 16, endIndex: 18, options: ["耳朵", "聽覺"] },
+      { id: 1, word: "耳朵", startIndex: 69, endIndex: 71, options: ["耳朵", "聽覺"] },
       { id: 2, word: "不善欺騙的器官", startIndex: 73, endIndex: 80, options: ["不善欺騙的器官", "誠心誠意的感官"] }
     ]
   },
@@ -55,10 +55,31 @@ export default function WordGame() {
   const [gameState, setGameState] = useState('typing'); // typing, selecting, choosing, completing
   const [replacedWords, setReplacedWords] = useState({}); // 儲存已替換的詞彙
   const [showCompleteHint, setShowCompleteHint] = useState(false); // 顯示完成提示
+  const [completedParagraphs, setCompletedParagraphs] = useState([]); // 儲存已完成的段落
   
   const textContainerRef = useRef(null);
   const cursorRef = useRef(null);
   const choiceMenuRef = useRef(null);
+  
+  // 使用 ref 來獲取最新的狀態值
+  const stateRef = useRef({
+    gameState,
+    selectedWordId,
+    currentParagraph,
+    selectedChoice,
+    wordChoices
+  });
+  
+  // 更新 ref 中的狀態
+  useEffect(() => {
+    stateRef.current = {
+      gameState,
+      selectedWordId,
+      currentParagraph,
+      selectedChoice,
+      wordChoices
+    };
+  }, [gameState, selectedWordId, currentParagraph, selectedChoice, wordChoices]);
 
   // 逐字顯示動畫
   useEffect(() => {
@@ -73,12 +94,74 @@ export default function WordGame() {
     } else if (isTyping && currentPosition >= gameData[currentParagraph].text.length) {
       setIsTyping(false);
       setGameState('selecting');
+      setSelectedWordId(null); // 游標停在段尾
     }
   }, [isTyping, currentPosition, currentParagraph]);
 
+  // 渲染已完成的段落（純文字）
+  const renderCompletedParagraph = (paragraphData) => {
+    const elements = [];
+    let lastIndex = 0;
+    const text = paragraphData.displayText;
+
+    // 處理已完成的段落，將互動詞彙替換為最終選擇
+    paragraphData.interactiveWords.forEach(word => {
+      // 添加前面的文字
+      if (word.startIndex > lastIndex) {
+        elements.push(
+          <span key={`text-${lastIndex}`}>
+            {text.substring(lastIndex, word.startIndex)}
+          </span>
+        );
+      }
+      
+      // 添加已替換的詞彙（純文字，不可互動）
+      const displayWordText = paragraphData.replacedWords[word.id] || word.word;
+      elements.push(
+        <span key={`word-${word.id}`} className="completed-word">
+          {displayWordText}
+        </span>
+      );
+      
+      lastIndex = word.endIndex;
+    });
+
+    // 添加剩餘的文字
+    if (lastIndex < text.length) {
+      elements.push(
+        <span key={`text-${lastIndex}`}>
+          {text.substring(lastIndex)}
+        </span>
+      );
+    }
+
+    // 為已完成的段落添加回車符號
+    elements.push(
+      <span key="paragraph-mark" className="paragraph-mark">↵</span>
+    );
+
+    return elements;
+  };
+
+  // 當段落完成時顯示提示
+  useEffect(() => {
+    if (!isTyping && gameState === 'selecting' && selectedWordId === null) {
+      setShowCompleteHint(true);
+    }
+  }, [isTyping, gameState, selectedWordId]);
+
   // 開始新段落
-  const startNewParagraph = () => {
+  const startNewParagraph = useCallback(() => {
     if (currentParagraph < gameData.length - 1) {
+      
+      // 保存當前段落到已完成列表
+      const currentParagraphData = {
+        ...gameData[currentParagraph],
+        replacedWords: { ...replacedWords },
+        displayText: gameData[currentParagraph].text
+      };
+      setCompletedParagraphs(prev => [...prev, currentParagraphData]);
+      
       setCurrentParagraph(prev => prev + 1);
       setDisplayedText('');
       setCurrentPosition(0);
@@ -89,39 +172,66 @@ export default function WordGame() {
       setReplacedWords({}); // 重置替換的詞彙
       setShowCompleteHint(false); // 重置完成提示
     }
-  };
+  }, [currentParagraph, replacedWords]);
 
   // 鍵盤控制
   useEffect(() => {
     const handleKeyPress = (e) => {
-      if (gameState === 'typing' && e.key === 'ArrowDown') {
+      const currentState = stateRef.current;
+      
+      // 在段尾按下下鍵，進入下一段
+      if (e.key === 'ArrowDown' && currentState.gameState === 'selecting' && currentState.selectedWordId === null) {
+        startNewParagraph();
+        return;
+      }
+      
+      // 檢查所有條件
+      if (currentState.gameState === 'typing' && e.key === 'ArrowDown') {
         // 跳過逐字動畫，直接顯示完整段落
         setDisplayedText(gameData[currentParagraph].text);
         setCurrentPosition(gameData[currentParagraph].text.length);
         setIsTyping(false);
         setGameState('selecting');
-      } else if (gameState === 'selecting') {
+      } else if (currentState.gameState === 'selecting') {
         if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
           // 在可互動詞彙和段落結尾之間切換
-          const interactiveWords = gameData[currentParagraph].interactiveWords;
-          const currentIndex = selectedWordId ? 
-            interactiveWords.findIndex(w => w.id === selectedWordId) : -1;
+          const interactiveWords = gameData[currentState.currentParagraph].interactiveWords;
+          const currentIndex = currentState.selectedWordId !== null ? 
+            interactiveWords.findIndex(w => w.id === currentState.selectedWordId) : -1;
           
+          
+          let newSelectedWordId;
           if (e.key === 'ArrowLeft') {
-            const newIndex = currentIndex > 0 ? currentIndex - 1 : interactiveWords.length - 1;
-            setSelectedWordId(interactiveWords[newIndex].id);
-          } else {
-            const newIndex = currentIndex < interactiveWords.length - 1 ? currentIndex + 1 : -1;
-            setSelectedWordId(newIndex === -1 ? null : interactiveWords[newIndex].id);
+            // 左鍵：從段尾移動到最後一個詞彙，或從詞彙間移動
+            if (currentIndex === -1) {
+              // 在段尾，移動到最後一個詞彙
+              newSelectedWordId = interactiveWords[interactiveWords.length - 1].id;
+            } else if (currentIndex === 0) {
+              // 在第一個詞彙，不移動
+              newSelectedWordId = currentState.selectedWordId;
+            } else {
+              // 在其他詞彙，移動到前一個詞彙
+              newSelectedWordId = interactiveWords[currentIndex - 1].id;
+            }
+          } else if (e.key === 'ArrowRight') {
+            // 右鍵：從詞彙移動到下一個詞彙，或移動到段尾
+            if (currentIndex === -1) {
+              // 在段尾，不移動
+              newSelectedWordId = null;
+            } else if (currentIndex === interactiveWords.length - 1) {
+              // 在最後一個詞彙，移動到段尾
+              newSelectedWordId = null;
+            } else {
+              // 在其他詞彙，移動到下一個詞彙
+              newSelectedWordId = interactiveWords[currentIndex + 1].id;
+            }
           }
           
-          // 檢查是否在段尾
-          const isAtEnd = selectedWordId === null;
-          setShowCompleteHint(isAtEnd);
-        } else if (e.key === 'ArrowDown' && selectedWordId) {
+          setSelectedWordId(newSelectedWordId);
+        } else if (e.key === 'ArrowDown' && currentState.selectedWordId !== null) {
           // 開啟選詞選單
-          const word = gameData[currentParagraph].interactiveWords.find(w => w.id === selectedWordId);
-          const currentWord = replacedWords[selectedWordId] || word.word;
+          const word = gameData[currentState.currentParagraph].interactiveWords.find(w => w.id === currentState.selectedWordId);
+          const currentWord = replacedWords[currentState.selectedWordId] || word.word;
           
           // 重新排列選項，將當前顯示的詞彙放在第一位
           const reorderedOptions = [currentWord];
@@ -136,26 +246,28 @@ export default function WordGame() {
           setSelectedChoice(0);
           setGameState('choosing');
         }
-      } else if (gameState === 'choosing') {
+      } else if (currentState.gameState === 'choosing') {
         if (e.key === 'ArrowLeft') {
-          setSelectedChoice(prev => prev > 0 ? prev - 1 : wordChoices.length - 1);
+          // 左鍵：如果已經在第一個選項，就不再移動
+          setSelectedChoice(prev => prev > 0 ? prev - 1 : prev);
         } else if (e.key === 'ArrowRight') {
-          setSelectedChoice(prev => prev < wordChoices.length - 1 ? prev + 1 : 0);
+          // 右鍵：如果已經在最後一個選項，就不再移動
+          setSelectedChoice(prev => prev < currentState.wordChoices.length - 1 ? prev + 1 : prev);
         } else if (e.key === 'ArrowDown') {
           // 確認選擇
-          const selectedWord = gameData[currentParagraph].interactiveWords.find(w => w.id === selectedWordId);
-          const newWord = wordChoices[selectedChoice];
+          const selectedWord = gameData[currentState.currentParagraph].interactiveWords.find(w => w.id === currentState.selectedWordId);
+          const newWord = currentState.wordChoices[currentState.selectedChoice];
           
           // 更新替換的詞彙
           setReplacedWords(prev => ({
             ...prev,
-            [selectedWordId]: newWord
+            [currentState.selectedWordId]: newWord
           }));
           
           setShowChoiceMenu(false);
           setGameState('selecting');
         }
-      } else if (gameState === 'selecting' && e.key === 'ArrowDown' && !selectedWordId) {
+      } else if (currentState.gameState === 'selecting' && e.key === 'ArrowDown' && currentState.selectedWordId === null) {
         // 在段尾按下下鍵，進入下一段
         startNewParagraph();
       }
@@ -163,7 +275,7 @@ export default function WordGame() {
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [gameState, selectedWordId, selectedChoice, wordChoices, currentParagraph]);
+  }, [startNewParagraph]);
 
   // 開始第一段
   useEffect(() => {
@@ -219,6 +331,18 @@ export default function WordGame() {
       );
     }
 
+    // 如果段落顯示完畢，添加回車符號
+    if (!isTyping && text.length === paragraph.text.length) {
+      elements.push(
+        <span key="paragraph-mark" className="paragraph-mark">
+          {!isTyping && gameState === 'selecting' && !selectedWordId && (
+            <span className="cursor-blink" style={{ position: 'absolute', marginLeft: '-6px' }}>|</span>
+          )}
+          ↵
+        </span>
+      );
+    }
+
     return elements;
   };
 
@@ -237,12 +361,22 @@ export default function WordGame() {
        let left = rect.left - containerRect.left;
       
        // 檢查是否超出容器邊界
-       const menuWidth = 120; // 縮小後的選單寬度
        const menuHeight = 30; // 縮小後的選單高度
       
+      // 先設置基本位置，然後檢查邊界
       // 如果右側超出，調整到左側
-      if (left + menuWidth > containerRect.width) {
-        left = rect.right - containerRect.left - menuWidth;
+      if (left > containerRect.width - 150) { // 預留150px空間
+        left = containerRect.width - 150;
+      }
+      
+      // 確保不會超出左邊界
+      if (left < 10) {
+        left = 10; // 留10px左邊距
+      }
+      
+      // 額外往左移，確保不會超出白紙
+      if (left > containerRect.width - 200) {
+        left = Math.max(10, containerRect.width - 200);
       }
       
       // 如果下方空間不足，調整到上方
@@ -322,29 +456,37 @@ export default function WordGame() {
         <div className="word2003-workspace">
           <div className="word2003-workspace-spacer"></div>
           <div className="word2003-paper">
-            {/* 邊界直角記號 */}
-            <div className="corner-mark top-left"></div>
-            <div className="corner-mark top-right"></div>
             
             {/* 文字容器 */}
             <div 
               ref={textContainerRef}
               className="word-game-text-container"
             >
-              {renderText()}
-              {isTyping && (
-                <span className="cursor-static" style={{ position: 'absolute', marginLeft: '-6px' }}>|</span>
-              )}
-              {!isTyping && gameState === 'selecting' && !selectedWordId && (
-                <span className="cursor-blink" style={{ position: 'absolute', marginLeft: '-6px' }}>|</span>
-              )}
+              {/* 文字邊界直角標示 */}
+              <div className="text-boundary-mark top-left"></div>
+              <div className="text-boundary-mark top-right"></div>
               
-              {/* 完成提示 */}
-              {showCompleteHint && (
-                <div className="complete-hint">
-                  左右移動以選擇字詞，按下確認可開啟選單，在段尾按下確認以繼續
+              {/* 已完成的段落 */}
+              {completedParagraphs.map((paragraphData, index) => (
+                <div key={`completed-${index}`} className="completed-paragraph">
+                  {renderCompletedParagraph(paragraphData)}
                 </div>
-              )}
+              ))}
+              
+              {/* 當前段落 */}
+              <div className="current-paragraph">
+                {renderText()}
+                {isTyping && (
+                  <span className="cursor-static" style={{ position: 'absolute', marginLeft: '-6px' }}>|</span>
+                )}
+                
+                {/* 完成提示 */}
+                {showCompleteHint && (
+                  <div className="complete-hint">
+                    左右移動以選擇字詞，按下確認可開啟選單，在段尾按下確認以繼續
+                  </div>
+                )}
+              </div>
             </div>
             
             {/* 選詞選單 */}
