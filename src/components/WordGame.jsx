@@ -279,7 +279,11 @@ export default function WordGame() {
 
   // 開始第一段
   useEffect(() => {
-    setIsTyping(true);
+    const timer = setTimeout(() => {
+      setIsTyping(true);
+    }, 2000); // 停頓2秒後開始打字動畫
+    
+    return () => clearTimeout(timer);
   }, []);
 
   // 渲染文字內容

@@ -48,8 +48,8 @@ const LongPressBackToLogin = ({
     <div
       style={{
         position: 'absolute',
-        left: '16px',
-        top: '16px',
+        right: '216px',
+        bottom: '31px',
         zIndex,
         opacity: state === 'revealing' ? 0.7 : 1,
         transition: 'opacity 0.2s ease-in-out',
