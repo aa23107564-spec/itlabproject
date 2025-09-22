@@ -94,7 +94,13 @@ export default function WordGame() {
   // 鍵盤控制
   useEffect(() => {
     const handleKeyPress = (e) => {
-      if (gameState === 'selecting') {
+      if (gameState === 'typing' && e.key === 'ArrowDown') {
+        // 跳過逐字動畫，直接顯示完整段落
+        setDisplayedText(gameData[currentParagraph].text);
+        setCurrentPosition(gameData[currentParagraph].text.length);
+        setIsTyping(false);
+        setGameState('selecting');
+      } else if (gameState === 'selecting') {
         if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
           // 在可互動詞彙和段落結尾之間切換
           const interactiveWords = gameData[currentParagraph].interactiveWords;
@@ -195,7 +201,7 @@ export default function WordGame() {
           >
             {displayWordText}
             {isSelected && !isTyping && gameState === 'selecting' && (
-              <span className="cursor-blink cursor-on-word" style={{ position: 'absolute', marginLeft: '-2px' }}>|</span>
+              <span className="cursor-blink cursor-on-word" style={{ position: 'absolute', marginLeft: '-4px' }}>|</span>
             )}
           </span>
         );
@@ -226,8 +232,8 @@ export default function WordGame() {
       const rect = wordElement.getBoundingClientRect();
       const containerRect = textContainerRef.current.getBoundingClientRect();
       
-       // 基本位置：詞彙下方，上緣與藍底白字下緣間隔3px
-       let top = rect.bottom - containerRect.top + 3;
+       // 基本位置：詞彙下方，上緣與藍底白字下緣間隔3px，再往下移50px
+       let top = rect.bottom - containerRect.top + 3 + 50;
        let left = rect.left - containerRect.left;
       
        // 檢查是否超出容器邊界
@@ -327,16 +333,16 @@ export default function WordGame() {
             >
               {renderText()}
               {isTyping && (
-                <span className="cursor-static" style={{ position: 'absolute', marginLeft: '-4px' }}>|</span>
+                <span className="cursor-static" style={{ position: 'absolute', marginLeft: '-6px' }}>|</span>
               )}
               {!isTyping && gameState === 'selecting' && !selectedWordId && (
-                <span className="cursor-blink" style={{ position: 'absolute', marginLeft: '-4px' }}>|</span>
+                <span className="cursor-blink" style={{ position: 'absolute', marginLeft: '-6px' }}>|</span>
               )}
               
               {/* 完成提示 */}
               {showCompleteHint && (
                 <div className="complete-hint">
-                  確認以完成段落
+                  左右移動以選擇字詞，按下確認可開啟選單，在段尾按下確認以繼續
                 </div>
               )}
             </div>

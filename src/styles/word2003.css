@@ -348,25 +348,20 @@ a:focus, button:focus, .nav-link:focus {
   animation: blink 1s infinite;
   color: #333;
   font-weight: bold;
-  position: absolute;
-  margin-left: -4px;
 }
 
 /* 靜態游標（打字時） */
 .cursor-static {
   color: #333;
   font-weight: bold;
-  position: absolute;
-  margin-left: -4px;
 }
 
 /* 游標在詞彙上時的特殊樣式 */
 .cursor-on-word {
   color: #333;
   font-weight: bold;
-  margin-left: -2px;
+  margin-left: -4px;
   text-decoration: none !important;
-  position: absolute;
 }
 
 @keyframes blink {
@@ -428,9 +423,12 @@ a:focus, button:focus, .nav-link:focus {
 /* 完成提示 */
 .complete-hint {
   position: absolute;
-  bottom: 20px;
-  right: 20px;
   color: #999;
   font-size: 12px;
   font-style: italic;
+  text-align: center;
+  width: 100%;
+  top: 100px;
+  left: 0;
+  margin-top: 20px;
 }
