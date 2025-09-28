@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 
 /**
- * Hook for handling long press Enter key functionality
+ * Hook for handling long press Left+Right arrow keys functionality
  * @param {Object} options - Configuration options
  * @param {string} options.loginPath - Path to navigate to on completion
  * @param {number} options.revealDelayMs - Delay before showing UI (default: 500ms)
@@ -24,6 +24,10 @@ export const useLongPressEnter = ({
   const progressTimerRef = useRef(null);
   const startTimeRef = useRef(null);
   const isLongPressingRef = useRef(false);
+  const pressedKeysRef = useRef(new Set()); // Track pressed keys
+  const keyPressTimesRef = useRef({}); // Track key press times
+  const gameInteractionBlockedRef = useRef(false); // Block game interaction when combination detected
+  const combinationDetectedRef = useRef(false); // Track if combination was detected
 
   // Check if current path is enabled
   const isEnabled = enabledPaths.includes(location.pathname);
@@ -51,6 +55,10 @@ export const useLongPressEnter = ({
     setState('idle');
     setProgress(0);
     isLongPressingRef.current = false;
+    pressedKeysRef.current.clear(); // Clear pressed keys
+    keyPressTimesRef.current = {}; // Clear key press times
+    gameInteractionBlockedRef.current = false; // Reset game interaction block
+    combinationDetectedRef.current = false; // Reset combination detection
   }, []);
 
   // Start reveal timer
@@ -94,21 +102,50 @@ export const useLongPressEnter = ({
 
   // Handle keydown event
   const handleKeyDown = useCallback((event) => {
-    if (!isEnabled || event.key !== 'Enter' || isInputFocused()) {
+    if (!isEnabled || isInputFocused()) {
       return;
     }
 
-    if (isLongPressingRef.current) return; // Prevent multiple triggers
+    // Track pressed keys and times
+    pressedKeysRef.current.add(event.key);
+    keyPressTimesRef.current[event.key] = Date.now();
     
-    isLongPressingRef.current = true;
-    startRevealTimer();
+    // Check if both Left and Right arrow keys are pressed within 150ms
+    if (pressedKeysRef.current.has('ArrowLeft') && pressedKeysRef.current.has('ArrowRight')) {
+      const leftTime = keyPressTimesRef.current['ArrowLeft'];
+      const rightTime = keyPressTimesRef.current['ArrowRight'];
+      
+      if (leftTime && rightTime && Math.abs(leftTime - rightTime) <= 150) {
+        if (isLongPressingRef.current) return; // Prevent multiple triggers
+        
+        combinationDetectedRef.current = true; // Mark combination as detected
+        gameInteractionBlockedRef.current = true; // Block game interaction
+        isLongPressingRef.current = true;
+        startRevealTimer();
+      }
+    }
   }, [isEnabled, isInputFocused, startRevealTimer]);
 
   // Handle keyup event
   const handleKeyUp = useCallback((event) => {
-    if (!isEnabled || event.key !== 'Enter') return;
+    if (!isEnabled) return;
     
-    reset();
+    // Remove released key from pressed keys
+    pressedKeysRef.current.delete(event.key);
+    delete keyPressTimesRef.current[event.key];
+    
+    // If either Left or Right arrow key is released, reset
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      // If combination was detected, keep blocking game interaction for a short time
+      if (combinationDetectedRef.current) {
+        // Keep blocking for 100ms to prevent any delayed game operations
+        setTimeout(() => {
+          reset();
+        }, 100);
+      } else {
+        reset();
+      }
+    }
   }, [isEnabled, reset]);
 
   // Handle visibility change (tab switching)
@@ -138,6 +175,8 @@ export const useLongPressEnter = ({
     state,
     progress,
     isEnabled,
-    reset
+    reset,
+    isGameInteractionBlocked: gameInteractionBlockedRef.current,
+    isCombinationDetected: combinationDetectedRef.current
   };
 };

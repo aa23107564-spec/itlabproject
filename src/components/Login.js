@@ -78,7 +78,7 @@ function Login() {
           animation: 'spin 1s linear infinite',
           marginBottom: '20px'
         }}></div>
-        <div style={{ fontSize: '18px', color: '#666' }}>加載中...</div>
+        <div style={{ fontSize: '18px', color: '#666', fontFamily: '点点像素体-方形, monospace' }}>加載中...</div>
         <style>{`
           @keyframes spin {
             0% { transform: rotate(0deg); }
@@ -111,7 +111,8 @@ function Login() {
         alignItems: 'center',
         justifyContent: 'center',
         color: '#999',
-        fontSize: '14px'
+        fontSize: '14px',
+        fontFamily: '点点像素体-方形, monospace'
       }}>
         圖檔放置處
       </div>
@@ -119,10 +120,11 @@ function Login() {
       {/* 標題 */}
       <h1 style={{
         fontSize: '24px',
-        fontWeight: 'bold',
+        fontWeight: 'normal',
         color: '#333',
         marginBottom: '20px',
-        textAlign: 'center'
+        textAlign: 'center',
+        fontFamily: '点点像素体-方形, monospace'
       }}>
         請掃描讀取記憶
       </h1>
@@ -143,7 +145,8 @@ function Login() {
             border: showError ? '2px solid #e74c3c' : '2px solid #ddd',
             borderRadius: '8px',
             outline: 'none',
-            textAlign: 'center'
+            textAlign: 'center',
+            fontFamily: '点点像素体-方形, monospace'
           }}
         />
         {/* 錯誤提示 */}
@@ -153,7 +156,8 @@ function Login() {
             fontSize: '16px',
             marginTop: '10px',
             textAlign: 'center',
-            fontWeight: '500'
+            fontWeight: '500',
+            fontFamily: '点点像素体-方形, monospace'
           }}>
             請重新掃描
           </div>

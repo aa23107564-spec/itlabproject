@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useLongPressEnter } from '../hooks/useLongPressEnter';
 
 /**
@@ -13,12 +13,18 @@ const LongPressBackToLogin = ({
   enabledPaths = ['/chapter1', '/chapter2', '/chapter3'],
   zIndex = 9999
 }) => {
-  const { state, progress, isEnabled } = useLongPressEnter({
+  const { state, progress, isEnabled, isGameInteractionBlocked, isCombinationDetected } = useLongPressEnter({
     loginPath,
     revealDelayMs,
     confirmHoldMs,
     enabledPaths
   });
+
+  // 將遊戲互動阻擋狀態暴露給全局
+  useEffect(() => {
+    window.gameInteractionBlocked = isGameInteractionBlocked;
+    window.combinationDetected = isCombinationDetected;
+  }, [isGameInteractionBlocked, isCombinationDetected]);
 
   // Don't render if not enabled or not in showing/completed state
   if (!isEnabled || state === 'idle' || state === 'revealing') {
@@ -26,7 +32,7 @@ const LongPressBackToLogin = ({
   }
 
   // Calculate SVG circle properties for smooth progress
-  const radius = 18;
+  const radius = 14; // 縮小進度條
   const circumference = 2 * Math.PI * radius;
   const strokeDasharray = circumference;
   const strokeDashoffset = circumference - (progress / 100) * circumference;
@@ -34,9 +40,9 @@ const LongPressBackToLogin = ({
   const getStatusText = () => {
     switch (state) {
       case 'revealing':
-        return '偵測到長按，即將顯示返回選項';
+        return '偵測到長按左鍵+右鍵，即將顯示返回選項';
       case 'showing':
-        return '持續按住以返回登入頁';
+        return '持續按住左鍵+右鍵以返回登入頁';
       case 'completed':
         return '正在返回登入頁';
       default:
@@ -60,11 +66,11 @@ const LongPressBackToLogin = ({
       }}
     >
       {/* Circular Progress Bar */}
-      <div style={{ position: 'relative', width: '40px', height: '40px' }}>
+      <div style={{ position: 'relative', width: '32px', height: '32px' }}>
         <svg
-          width="40"
-          height="40"
-          viewBox="0 0 40 40"
+          width="32"
+          height="32"
+          viewBox="0 0 32 32"
           style={{ transform: 'rotate(-90deg)' }}
           role="progressbar"
           aria-valuenow={Math.round(progress)}
@@ -74,8 +80,8 @@ const LongPressBackToLogin = ({
         >
           {/* Background circle */}
           <circle
-            cx="20"
-            cy="20"
+            cx="16"
+            cy="16"
             r={radius}
             stroke="#e5e7eb"
             strokeWidth="2.5"
@@ -83,10 +89,10 @@ const LongPressBackToLogin = ({
           />
           {/* Progress circle */}
           <circle
-            cx="20"
-            cy="20"
+            cx="16"
+            cy="16"
             r={radius}
-            stroke="#3b82f6"
+            stroke="#6b7280"
             strokeWidth="2.5"
             fill="none"
             strokeDasharray={strokeDasharray}
@@ -105,10 +111,11 @@ const LongPressBackToLogin = ({
           fontSize: '12px',
           color: '#374151',
           fontWeight: '500',
-          whiteSpace: 'nowrap'
+          whiteSpace: 'nowrap',
+          fontFamily: '点点像素体-方形, monospace'
         }}
       >
-        長按以返回
+        長按左鍵+右鍵以返回
       </span>
 
       {/* Screen reader status */}

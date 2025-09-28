@@ -179,6 +179,29 @@ export default function WordGame() {
     const handleKeyPress = (e) => {
       const currentState = stateRef.current;
       
+      // 檢查是否為左鍵或右鍵，如果是則短暫延遲以檢測組合按鍵
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        setTimeout(() => {
+          // 檢查遊戲互動是否被阻擋（組合按鍵檢測）
+          const gameInteractionBlocked = window.gameInteractionBlocked || false;
+          const combinationDetected = window.combinationDetected || false;
+          
+          if (gameInteractionBlocked || combinationDetected) {
+            return; // 不執行遊戲操作
+          }
+          
+          // 執行正常的遊戲操作
+          executeGameOperation(e, currentState);
+        }, 50); // 50ms 延遲
+        return;
+      }
+      
+      // 其他按鍵（如下鍵）正常處理
+      executeGameOperation(e, currentState);
+    };
+    
+    const executeGameOperation = (e, currentState) => {
+      
       // 在段尾按下下鍵，進入下一段
       if (e.key === 'ArrowDown' && currentState.gameState === 'selecting' && currentState.selectedWordId === null) {
         startNewParagraph();
