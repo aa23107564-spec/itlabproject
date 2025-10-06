@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';  
 import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 
 function Login() {
   const [inputValue, setInputValue] = useState('');
@@ -39,7 +40,7 @@ function Login() {
             setShowError(false);
           }, 3000);
         }
-      }, 1500);
+      }, 2000);
     }
   };
 
@@ -61,43 +62,67 @@ function Login() {
   if (isLoading) {
     return (
       <div style={{
-        width: '100%',
-        height: '100%',
+        width: '100vw',
+        height: '100vh',
         backgroundColor: 'white',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        flexDirection: 'column'
+        flexDirection: 'column',
+        overflow: 'hidden'
       }}>
         <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginBottom: '40px',
           width: '50px',
           height: '50px',
-          border: '5px solid #f3f3f3',
-          borderTop: '5px solid #3498db',
-          borderRadius: '50%',
-          animation: 'spin 1s linear infinite',
-          marginBottom: '20px'
-        }}></div>
+          position: 'relative'
+        }}>
+          {Array.from({ length: 8 }).map((_, index) => (
+            <motion.div
+              key={index}
+              initial={{
+                opacity: index === 0 ? 1 : 0
+              }}
+              style={{
+                position: 'absolute',
+                width: '4px',
+                height: '12px',
+                backgroundColor: '#666',
+                borderRadius: '2px',
+                transformOrigin: 'center 25px',
+                transform: `rotate(${index * 45}deg)`
+              }}
+              animate={{
+                opacity: [0, 1, 0]
+              }}
+              transition={{
+                duration: 1.6,
+                repeat: Infinity,
+                delay: index * 0.2,
+                ease: [0.4, 0.0, 0.2, 1],
+                times: index === 0 ? [0, 0.3, 1] : [0, 0.5, 1]
+              }}
+            />
+          ))}
+        </div>
         <div style={{ fontSize: '18px', color: '#666', fontFamily: '点点像素体-方形, monospace' }}>加載中...</div>
-        <style>{`
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
-        `}</style>
       </div>
     );
   }
 
   return (
     <div style={{
-      width: '100%',
-      height: '100%',
+      width: '100vw',
+      height: '100vh',
       backgroundColor: '#f5f5f5',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      flexDirection: 'column'
+      flexDirection: 'column',
+      overflow: 'hidden'
     }}>
       {/* 圖檔放置處 */}
       <div style={{
@@ -120,13 +145,14 @@ function Login() {
       {/* 標題 */}
       <h1 style={{
         fontSize: '24px',
-        fontWeight: 'normal',
+        fontWeight: '500',
         color: '#333',
         marginBottom: '20px',
         textAlign: 'center',
-        fontFamily: '点点像素体-方形, monospace'
+        fontFamily: '点点像素体-方形, monospace',
+        fontStyle: 'normal'
       }}>
-        請掃描讀取記憶
+        請掃描條碼讀取記憶
       </h1>
 
       {/* 輸入框 */}
@@ -139,14 +165,15 @@ function Login() {
           onKeyPress={handleKeyPress}
           style={{
             width: '300px',
-            height: '50px',
+            height: '40px',
             fontSize: '18px',
             padding: '0 15px',
-            border: showError ? '2px solid #e74c3c' : '2px solid #ddd',
-            borderRadius: '8px',
+            border: 'none',
+            borderRadius: '0',
             outline: 'none',
             textAlign: 'center',
-            fontFamily: '点点像素体-方形, monospace'
+            fontFamily: '点点像素体-方形, monospace',
+            backgroundColor: '#D4D4DE'
           }}
         />
         {/* 錯誤提示 */}

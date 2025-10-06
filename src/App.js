@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { use43Fullscreen } from './hooks/use43Fullscreen';
 import Login from './components/Login';
 import Chapter1 from './components/Chapter1';
@@ -7,28 +7,45 @@ import Chapter2 from './components/Chapter2';
 import Chapter3 from './components/Chapter3';
 import TestPage from './components/TestPage';
 
-function App() {
+function AppContent() {
+  const location = useLocation();
   const scale = use43Fullscreen();
 
+  // 只有 Chapter3 使用 4:3 全螢幕縮放，其他頁面使用 16:9 全螢幕
+  const shouldUse43Scaling = location.pathname === '/chapter3';
+
+  return (
+    <div 
+      className="app-container"
+      style={{
+        transform: shouldUse43Scaling ? `scale(${scale})` : 'none',
+        transformOrigin: 'center',
+        width: shouldUse43Scaling ? '1024px' : '100vw',
+        height: shouldUse43Scaling ? '768px' : '100vh',
+        margin: shouldUse43Scaling ? 'auto' : '0',
+        overflow: 'hidden'
+      }}
+    >
+      <div className="App" style={{
+        width: '100%',
+        height: '100%'
+      }}>
+        <Routes>
+          <Route path="/" element={<Login />} />
+          <Route path="/chapter1" element={<Chapter1 />} />
+          <Route path="/chapter2" element={<Chapter2 />} />
+          <Route path="/chapter3" element={<Chapter3 />} />
+          <Route path="/test" element={<TestPage />} />
+        </Routes>
+      </div>
+    </div>
+  );
+}
+
+function App() {
   return (
     <Router>
-      <div 
-        className="app-container"
-        style={{
-          transform: `scale(${scale})`,
-          transformOrigin: 'center'
-        }}
-      >
-        <div className="App">
-          <Routes>
-            <Route path="/" element={<Login />} />
-            <Route path="/chapter1" element={<Chapter1 />} />
-            <Route path="/chapter2" element={<Chapter2 />} />
-            <Route path="/chapter3" element={<Chapter3 />} />
-            <Route path="/test" element={<TestPage />} />
-          </Routes>
-        </div>
-      </div>
+      <AppContent />
     </Router>
   );
 }

@@ -48,6 +48,31 @@ export default function WordGame() {
   const [displayedText, setDisplayedText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [currentPosition, setCurrentPosition] = useState(0);
+  
+  // 音效引用
+  const typingSoundRef = useRef(null);
+  
+  // 初始化音效
+  useEffect(() => {
+    // 檢查是否在測試環境中
+    if (typeof window !== 'undefined' && window.Audio) {
+      typingSoundRef.current = new Audio('/audio/sfx/打字持續聲.mp3');
+      typingSoundRef.current.loop = true; // 循環播放
+      typingSoundRef.current.volume = 0.6; // 設置音量（從 0.3 調高到 0.6）
+    }
+    
+    return () => {
+      if (typingSoundRef.current) {
+        try {
+          typingSoundRef.current.pause();
+        } catch (e) {
+          // 忽略測試環境中的錯誤
+        }
+        typingSoundRef.current = null;
+      }
+    };
+  }, []);
+  
   const [selectedWordId, setSelectedWordId] = useState(null);
   const [showChoiceMenu, setShowChoiceMenu] = useState(false);
   const [selectedChoice, setSelectedChoice] = useState(0);
@@ -84,6 +109,20 @@ export default function WordGame() {
   // 逐字顯示動畫
   useEffect(() => {
     if (isTyping && currentPosition < gameData[currentParagraph].text.length) {
+      // 開始播放打字音效
+      if (typingSoundRef.current && typingSoundRef.current.paused) {
+        try {
+          const playPromise = typingSoundRef.current.play();
+          if (playPromise && typeof playPromise.catch === 'function') {
+            playPromise.catch(e => {
+              console.log('音效播放失敗:', e);
+            });
+          }
+        } catch (e) {
+          console.log('音效播放失敗:', e);
+        }
+      }
+      
       const delay = 100; // 固定速度 100ms
       const timer = setTimeout(() => {
         setDisplayedText(prev => prev + gameData[currentParagraph].text[currentPosition]);
@@ -97,6 +136,17 @@ export default function WordGame() {
       setSelectedWordId(null); // 游標停在段尾
     }
   }, [isTyping, currentPosition, currentParagraph]);
+
+  // 處理打字狀態變化，控制音效播放
+  useEffect(() => {
+    if (!isTyping && typingSoundRef.current && !typingSoundRef.current.paused) {
+      try {
+        typingSoundRef.current.pause();
+      } catch (e) {
+        // 忽略測試環境中的錯誤
+      }
+    }
+  }, [isTyping]);
 
   // 渲染已完成的段落（純文字）
   const renderCompletedParagraph = (paragraphData) => {
