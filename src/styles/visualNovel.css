@@ -1,0 +1,425 @@
+/* ==========================================
+   視覺小說 Design Tokens
+   ========================================== */
+
+:root {
+  /* Colors */
+  --vn-color-surface-white: #FFFFFF;
+  --vn-color-surface-black: #000000;
+  --vn-color-icon-secondary: #D4D4DE;
+  --vn-color-text-primary: #000000;
+  --vn-color-text-invert: #FFFFFF;
+  --vn-color-border: #000000;
+  
+  /* Typography */
+  --vn-font-family-pixel: '点点像素体-方形', 'DotGothic16', monospace, sans-serif;
+  --vn-font-size-chatbox: 30px;
+  --vn-font-size-body: 30px;
+  --vn-line-height-chatbox: 30px;
+  --vn-line-height-body: 30px;
+  
+  /* Spacing */
+  --vn-padding-chatbox: 60px 70px;
+  --vn-padding-select: 18px 40px;
+  --vn-padding-name-tag: 18px 35px;
+  
+  /* Border Radius */
+  --vn-radius-chatbox: 20px;
+  --vn-radius-select: 999px;
+  --vn-radius-triangle: 5px;
+  
+  /* Border Width */
+  --vn-border-width-thin: 1px;
+  --vn-border-width-medium: 1.5px;
+  
+  /* Hand-drawn Border Variables */
+  --handdrawn-border-width: 2px;
+  --handdrawn-border-color: #000000;
+  --handdrawn-border-roughness: 0.3;
+  
+  /* Shadows */
+  --vn-shadow-editor: 0px 4px 4px rgba(0, 0, 0, 0.25);
+  
+  /* Dimensions - Fixed sizes */
+  --vn-chatbox-width: 800px;
+  --vn-chatbox-height: 200px;
+  --vn-select-width: 600px;
+  --vn-select-height: 60px;
+  --vn-name-tag-width: 200px;
+  --vn-name-tag-height: 40px;
+  
+  /* Animation */
+  --vn-transition-duration: 0.2s;
+  --vn-typewriter-speed: 50ms;
+}
+
+/* ==========================================
+   主角對話框 - chatbox-me (固定大小)
+   ========================================== */
+
+.chatbox-me {
+  position: relative;
+  width: var(--vn-chatbox-width);
+  height: var(--vn-chatbox-height);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  padding: 0;
+  gap: 10px;
+  isolation: isolate;
+}
+
+.chatbox-me__container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: var(--vn-color-surface-white);
+  border: none;
+  border-radius: var(--vn-radius-chatbox);
+  padding: 20px 30px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.chatbox-me__triangle {
+  position: absolute;
+  width: 0;
+  height: 0;
+  left: 50px;
+  bottom: -20px;
+  border-left: 20px solid transparent;
+  border-right: 20px solid transparent;
+  border-top: 20px solid var(--vn-color-surface-white);
+  z-index: 2;
+}
+
+.chatbox-me__triangle::before {
+  content: '';
+  position: absolute;
+  top: -20px;
+  left: -20px;
+  width: 0;
+  height: 0;
+  border-left: 20px solid transparent;
+  border-right: 20px solid transparent;
+  border-top: 20px solid var(--vn-color-border);
+  z-index: -1;
+}
+
+.chatbox-me__text {
+  font-family: var(--vn-font-family-pixel);
+  font-style: normal;
+  font-weight: 500;
+  font-size: var(--vn-font-size-chatbox);
+  line-height: var(--vn-line-height-chatbox);
+  text-align: left;
+  color: var(--vn-color-text-primary);
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  position: relative;
+  z-index: 2;
+}
+
+/* ==========================================
+   編輯對話框 - chatbox-editor (固定大小)
+   ========================================== */
+
+.chatbox-editor {
+  position: relative;
+  width: var(--vn-chatbox-width);
+  height: var(--vn-chatbox-height);
+  margin: 0 auto;
+  margin-top: 50px;
+}
+
+.chatbox-editor__name-tag {
+  position: absolute;
+  top: -30px;
+  left: 20px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 8px 15px;
+  gap: 10px;
+  width: var(--vn-name-tag-width);
+  height: var(--vn-name-tag-height);
+  background: var(--vn-color-surface-black);
+  border: var(--vn-border-width-thin) solid var(--vn-color-surface-black);
+}
+
+.chatbox-editor__name-tag-text {
+  font-family: var(--vn-font-family-pixel);
+  font-style: normal;
+  font-weight: 500;
+  font-size: 20px;
+  line-height: 20px;
+  text-align: center;
+  color: var(--vn-color-text-invert);
+}
+
+.chatbox-editor__container {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  padding: 20px 30px;
+  gap: 10px;
+  width: 100%;
+  height: 100%;
+  background: var(--vn-color-surface-white);
+  border: none;
+  box-shadow: var(--vn-shadow-editor);
+  border-radius: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.chatbox-editor__text {
+  font-family: var(--vn-font-family-pixel);
+  font-style: normal;
+  font-weight: 500;
+  font-size: var(--vn-font-size-chatbox);
+  line-height: var(--vn-line-height-chatbox);
+  text-align: left;
+  color: var(--vn-color-text-primary);
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  height: 100%;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  position: relative;
+  z-index: 2;
+}
+
+/* ==========================================
+   選項按鈕 - select-chat
+   ========================================== */
+
+.select-chat {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  padding: var(--vn-padding-select);
+  gap: 10px;
+  width: var(--vn-select-width);
+  height: var(--vn-select-height);
+  margin: 0 auto;
+  background: var(--vn-color-surface-white);
+  border: none;
+  border-radius: var(--vn-radius-select);
+  cursor: pointer;
+  transition: all var(--vn-transition-duration) ease;
+  user-select: none;
+}
+
+.select-chat__text {
+  font-family: var(--vn-font-family-pixel);
+  font-style: normal;
+  font-weight: 500;
+  font-size: var(--vn-font-size-body);
+  line-height: var(--vn-line-height-body);
+  text-align: center;
+  color: var(--vn-color-text-primary);
+  transition: color var(--vn-transition-duration) ease;
+  position: relative;
+  z-index: 2;
+}
+
+/* Hover and Active States */
+.select-chat:hover,
+.select-chat.active,
+.select-chat.pressed {
+  background: var(--vn-color-surface-black);
+  border-color: var(--vn-color-surface-white);
+}
+
+.select-chat:hover .handdrawn-border::before,
+.select-chat.active .handdrawn-border::before,
+.select-chat.pressed .handdrawn-border::before {
+  --handdrawn-border-color: #FFFFFF;
+}
+
+.select-chat:hover .handdrawn-border::after,
+.select-chat.active .handdrawn-border::after,
+.select-chat.pressed .handdrawn-border::after {
+  --handdrawn-border-color: #FFFFFF;
+}
+
+.select-chat:hover .select-chat__text,
+.select-chat.active .select-chat__text,
+.select-chat.pressed .select-chat__text {
+  color: var(--vn-color-text-invert);
+}
+
+/* ==========================================
+   響應式設計
+   ========================================== */
+
+@media (max-width: 900px) {
+  :root {
+    --vn-chatbox-width: 90vw;
+    --vn-select-width: 80vw;
+  }
+  
+  .chatbox-me__triangle {
+    left: 5%;
+  }
+  
+  .chatbox-editor__name-tag {
+    left: 5%;
+  }
+}
+
+@media (max-width: 768px) {
+  :root {
+    --vn-font-size-chatbox: 22px;
+    --vn-font-size-body: 22px;
+    --vn-line-height-chatbox: 26px;
+    --vn-line-height-body: 26px;
+    --vn-padding-chatbox: 40px 50px;
+    --vn-padding-select: 14px 30px;
+    --vn-chatbox-height: 150px;
+  }
+}
+
+/* ==========================================
+   打字機效果動畫
+   ========================================== */
+
+/* ==========================================
+   手繪筆觸邊框效果
+   ========================================== */
+
+.handdrawn-border {
+  position: relative;
+  border: none !important;
+}
+
+.handdrawn-border::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border: var(--handdrawn-border-width) solid var(--handdrawn-border-color);
+  border-radius: inherit;
+  filter: 
+    contrast(1.2) 
+    brightness(0.9)
+    drop-shadow(0 0 1px var(--handdrawn-border-color))
+    drop-shadow(0.5px 0.5px 0px var(--handdrawn-border-color))
+    drop-shadow(-0.5px -0.5px 0px var(--handdrawn-border-color))
+    drop-shadow(1px 0px 0px var(--handdrawn-border-color))
+    drop-shadow(-1px 0px 0px var(--handdrawn-border-color));
+  pointer-events: none;
+  z-index: 1;
+}
+
+
+
+.handdrawn-border::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: 
+    /* 轻微的手绘质感点 */
+    radial-gradient(circle at 15% 10%, var(--handdrawn-border-color) 0.3px, transparent 1px),
+    radial-gradient(circle at 85% 15%, var(--handdrawn-border-color) 0.3px, transparent 1px),
+    radial-gradient(circle at 10% 85%, var(--handdrawn-border-color) 0.3px, transparent 1px),
+    radial-gradient(circle at 90% 80%, var(--handdrawn-border-color) 0.3px, transparent 1px),
+    radial-gradient(circle at 25% 5%, var(--handdrawn-border-color) 0.2px, transparent 0.8px),
+    radial-gradient(circle at 75% 8%, var(--handdrawn-border-color) 0.2px, transparent 0.8px),
+    radial-gradient(circle at 5% 75%, var(--handdrawn-border-color) 0.2px, transparent 0.8px),
+    radial-gradient(circle at 95% 70%, var(--handdrawn-border-color) 0.2px, transparent 0.8px);
+  background-size: 30px 30px, 35px 35px, 28px 28px, 32px 32px, 25px 25px, 22px 22px, 26px 26px, 24px 24px;
+  background-position: 0 0, 8px 5px, 3px 10px, 12px 2px, 5px 3px, 2px 6px, 8px 4px, 6px 8px;
+  background-repeat: no-repeat;
+  border-radius: inherit;
+  opacity: 0.3;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.handdrawn-border:hover::before {
+  filter: 
+    contrast(1.6) 
+    brightness(0.5)
+    drop-shadow(0 0 2px var(--handdrawn-border-color))
+    drop-shadow(0 0 4px rgba(0,0,0,0.6));
+}
+
+/* 手繪邊框變體 */
+.handdrawn-border-thick {
+  --handdrawn-border-width: 3px;
+}
+
+.handdrawn-border-thin {
+  --handdrawn-border-width: 1px;
+}
+
+/* 選項專用細邊框 */
+.select-chat.handdrawn-border {
+  --handdrawn-border-width: 0.5px;
+}
+
+.handdrawn-border-white {
+  --handdrawn-border-color: #FFFFFF;
+}
+
+.handdrawn-border-gray {
+  --handdrawn-border-color: #D4D4DE;
+}
+
+/* ==========================================
+   視覺小說容器
+   ========================================== */
+
+.visual-novel-container {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
+  background-color: #fffaf0;
+}
+
+.visual-novel-background {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+  object-fit: cover;
+  z-index: 0;
+}
+
+.visual-novel-content {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding-bottom: 5vh;
+  overflow: hidden;
+}
+
+.visual-novel-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px;
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
