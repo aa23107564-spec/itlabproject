@@ -28,19 +28,83 @@ const VisualNovelEngine = ({ script, onComplete }) => {
   const currentNode = currentDialogues[currentIndex];
 
   /**
-   * 打字機效果
+   * 打字機效果（在逗號處停頓0.4秒，支持 HTML 標籤）
    */
   const startTypewriter = useCallback((text) => {
     setDisplayedText('');
     setIsTyping(true);
+    
+    // 提取純文本內容（去除 HTML 標籤）
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = text;
+    const plainText = tempDiv.textContent || tempDiv.innerText || '';
+    
+    // 建立字符到完整 HTML 的映射
+    const getHTMLUpToChar = (targetLength) => {
+      let result = '';
+      let textLength = 0;
+      let inTag = false;
+      
+      for (let i = 0; i < text.length; i++) {
+        const char = text[i];
+        
+        if (char === '<') {
+          inTag = true;
+          result += char;
+        } else if (char === '>') {
+          inTag = false;
+          result += char;
+        } else if (inTag) {
+          result += char;
+        } else {
+          if (textLength < targetLength) {
+            result += char;
+            textLength++;
+          } else {
+            break;
+          }
+        }
+      }
+      
+      // 確保所有開啟的標籤都被關閉
+      const openTags = [];
+      const tagRegex = /<(\/?)([\w]+)[^>]*>/g;
+      let match;
+      const tempResult = result;
+      
+      while ((match = tagRegex.exec(tempResult)) !== null) {
+        if (match[1] === '') {
+          // 開始標籤
+          openTags.push(match[2]);
+        } else {
+          // 結束標籤
+          openTags.pop();
+        }
+      }
+      
+      // 為未關閉的標籤添加關閉標籤
+      for (let i = openTags.length - 1; i >= 0; i--) {
+        result += `</${openTags[i]}>`;
+      }
+      
+      return result;
+    };
+    
     let charIndex = 0;
 
     const type = () => {
-      if (charIndex < text.length) {
-        setDisplayedText(text.slice(0, charIndex + 1));
+      if (charIndex < plainText.length) {
+        const displayHTML = getHTMLUpToChar(charIndex + 1);
+        setDisplayedText(displayHTML);
+        const currentChar = plainText[charIndex];
         charIndex++;
-        typewriterTimer.current = setTimeout(type, 50); // 50ms per character
+        
+        // 在所有標點符號處停頓0.4秒，其他字符50ms
+        const punctuationMarks = ['，', '。', '！', '？', '；', '：', '、', '…', '─', '—', '～', '‧'];
+        const delay = punctuationMarks.includes(currentChar) ? 400 : 50;
+        typewriterTimer.current = setTimeout(type, delay);
       } else {
+        setDisplayedText(text); // 確保最終顯示完整的原始 HTML
         setIsTyping(false);
       }
     };
@@ -74,6 +138,10 @@ const VisualNovelEngine = ({ script, onComplete }) => {
 
     // 檢查是否有下一個節點
     if (!currentNode) return;
+
+    // 立即清理顯示文字，避免閃現
+    setDisplayedText('');
+    setIsTyping(false);
 
     // 儲存當前狀態到歷史
     setHistory(prev => [...prev, { branch: currentBranch, index: currentIndex }]);
@@ -124,6 +192,10 @@ const VisualNovelEngine = ({ script, onComplete }) => {
   const goBack = useCallback(() => {
     if (history.length === 0) return;
 
+    // 立即清理顯示文字，避免閃現
+    setDisplayedText('');
+    setIsTyping(false);
+
     const lastState = history[history.length - 1];
     setCurrentBranch(lastState.branch);
     setCurrentIndex(lastState.index);
@@ -138,6 +210,10 @@ const VisualNovelEngine = ({ script, onComplete }) => {
     
     const choice = currentNode.choices[choiceIndex];
     if (!choice) return;
+
+    // 立即清理顯示文字，避免閃現
+    setDisplayedText('');
+    setIsTyping(false);
 
     // 儲存當前狀態到歷史
     setHistory(prev => [...prev, { branch: currentBranch, index: currentIndex }]);
@@ -232,10 +308,10 @@ const VisualNovelEngine = ({ script, onComplete }) => {
       {currentNode.type === 'dialogue' && (
         <>
           {currentNode.speaker === 'protagonist' && (
-            <ChatboxMe text={displayedText} isTyping={isTyping} />
+            <ChatboxMe text={displayedText} isTyping={isTyping} className={currentNode.className} />
           )}
           {currentNode.speaker === 'editor' && (
-            <ChatboxEditor text={displayedText} name="編輯" isTyping={isTyping} />
+            <ChatboxEditor text={displayedText} name="編輯" isTyping={isTyping} className={currentNode.className} />
           )}
         </>
       )}
@@ -258,4 +334,5 @@ const VisualNovelEngine = ({ script, onComplete }) => {
 };
 
 export default VisualNovelEngine;
+
 
