@@ -36,7 +36,7 @@ const DrinkCoffeeAnimation = () => {
       
       {/* 第二層：drinkcoffee.jpg - z-index: 2 */}
       <img 
-        src="/images/backgrounds/drinkcoffee.jpg" 
+        src={`${process.env.PUBLIC_URL || ''}/images/backgrounds/drinkcoffee.jpg`}
         alt="Drink Coffee" 
         className="drink-coffee-layer"
         style={{ 
@@ -48,7 +48,7 @@ const DrinkCoffeeAnimation = () => {
       
       {/* 第三層：22.jpg - z-index: 3 */}
       <img 
-        src="/images/backgrounds/22.jpg" 
+        src={`${process.env.PUBLIC_URL || ''}/images/backgrounds/22.jpg`}
         alt="Background 22" 
         className="drink-coffee-layer"
         style={{ 

@@ -81,7 +81,7 @@ function Chapter2() {
     <div className="visual-novel-container">
       {/* 第一層：22.jpg - 初始淡入，z-index: 1 */}
       <img 
-        src="/images/backgrounds/22.jpg" 
+        src={`${process.env.PUBLIC_URL || ''}/images/backgrounds/22.jpg`}
         alt="Background 22" 
         className="visual-novel-background bg-layer-1 fade-in-start"
         style={{ zIndex: 1 }}
@@ -89,7 +89,7 @@ function Chapter2() {
       
       {/* 第二層：drinkcoffee.jpg - 第一次轉場，z-index: 2 */}
       <img 
-        src="/images/backgrounds/drinkcoffee.jpg" 
+        src={`${process.env.PUBLIC_URL || ''}/images/backgrounds/drinkcoffee.jpg`}
         alt="Background Drink Coffee" 
         className="visual-novel-background bg-layer-transition"
         style={{ 
@@ -101,7 +101,7 @@ function Chapter2() {
       
       {/* 第三層：22.jpg - 第二次轉場，z-index: 3 */}
       <img 
-        src="/images/backgrounds/22.jpg" 
+        src={`${process.env.PUBLIC_URL || ''}/images/backgrounds/22.jpg`}
         alt="Background 22 Final" 
         className="visual-novel-background bg-layer-transition"
         style={{ 

@@ -56,7 +56,7 @@ export default function WordGame() {
   useEffect(() => {
     // 檢查是否在測試環境中
     if (typeof window !== 'undefined' && window.Audio) {
-      typingSoundRef.current = new Audio('/audio/sfx/打字持續聲.mp3');
+      typingSoundRef.current = new Audio(`${process.env.PUBLIC_URL || ''}/audio/sfx/打字持續聲.mp3`);
       typingSoundRef.current.loop = true; // 循環播放
       typingSoundRef.current.volume = 0.6; // 設置音量（從 0.3 調高到 0.6）
     }

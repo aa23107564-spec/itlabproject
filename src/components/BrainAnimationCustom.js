@@ -12,7 +12,7 @@ function BrainAnimationCustom() {
     }}>
       {/* 直接使用 GIF 動畫 */}
       <img
-        src="/images/icons/brain.gif"
+        src={`${process.env.PUBLIC_URL || ''}/images/icons/brain.gif`}
         alt="腦部動畫"
         style={{
           width: '100%',
