@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 /**
  * Hook for handling long press Left+Right arrow keys functionality
@@ -17,6 +17,7 @@ export const useLongPressEnter = ({
   enabledPaths = ['/chapter1', '/chapter2', '/chapter3']
 }) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [state, setState] = useState('idle'); // 'idle' | 'revealing' | 'showing' | 'completed'
   const [progress, setProgress] = useState(0);
   
@@ -70,7 +71,7 @@ export const useLongPressEnter = ({
       setState('showing');
       startProgressTimer();
     }, revealDelayMs);
-  }, [revealDelayMs]);
+  }, [revealDelayMs, startProgressTimer]);
 
   // Start progress timer with smooth animation using requestAnimationFrame + performance.now()
   const startProgressTimer = useCallback(() => {
@@ -87,8 +88,8 @@ export const useLongPressEnter = ({
       
       if (progressPercent >= 100) {
         setState('completed');
-        // Navigate to login page
-        window.location.assign(loginPath);
+        // Navigate to login page using React Router
+        navigate(loginPath);
         return;
       }
       
@@ -98,7 +99,7 @@ export const useLongPressEnter = ({
     
     // 開始動畫循環
     progressTimerRef.current = requestAnimationFrame(updateProgress);
-  }, [confirmHoldMs, loginPath]);
+  }, [confirmHoldMs, loginPath, navigate]);
 
   // Handle keydown event
   const handleKeyDown = useCallback((event) => {
