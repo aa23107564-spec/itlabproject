@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <base href="/itlabproject/">
+    <meta name="viewport" content="width=1024, height=768, initial-scale=1.0, user-scalable=no">
+    <title>大展網站</title>
+    <meta name="description" content="一個使用React建立的4:3螢幕比例網站">
+    <script>
+        // GitHub Pages SPA 路由修正
+        // 當訪問不存在的路徑時，重定向到 index.html 讓 React Router 處理
+        var segmentCount = 0;
+        var l = window.location;
+        l.replace(
+            l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+            l.pathname.split('/').slice(0, 1 + segmentCount).join('/') + '/?/' +
+            l.pathname.slice(1).split('/').slice(segmentCount).join('/').replace(/&/g, '~and~') +
+            (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+            l.hash
+        );
+    </script>
+</head>
+<body>
+    <div id="root">
+        <div style="
+            display: flex; 
+            justify-content: center; 
+            align-items: center; 
+            height: 100vh; 
+            font-family: 'Courier New', monospace;
+            color: #333;
+        ">
+            <div style="text-align: center;">
+                <h2>正在重新導向...</h2>
+                <p>如果頁面沒有自動跳轉，請點擊 <a href="/itlabproject/">這裡</a></p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
