@@ -1,0 +1,9 @@
+/* 点点像素体-方形 字體 */
+@font-face {
+  font-family: '点点像素体-方形';
+  src: url('../../public/fonts/点点像素体-方形.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
