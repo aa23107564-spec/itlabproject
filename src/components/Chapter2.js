@@ -10,6 +10,7 @@ function Chapter2() {
   const [showEndingFadeOut, setShowEndingFadeOut] = useState(false); // 控制結局淡出效果
   const [isEndingBA, setIsEndingBA] = useState(false); // 標記是否是 ending-b-a 分支結局
   const [hideParticles, setHideParticles] = useState(false); // 控制顆粒動畫隱藏
+  const [currentDialogueClass, setCurrentDialogueClass] = useState(''); // 當前對話的 className
   // 使用三個圖片層來避免 src 切換導致的閃現
   const [imageOpacities, setImageOpacities] = useState({
     img22_1: 0, // 第一個 22.jpg，用於初始淡入和最終顯示
@@ -78,7 +79,7 @@ function Chapter2() {
   }, []);
 
   return (
-    <div className="visual-novel-container">
+    <div className={`visual-novel-container ${currentDialogueClass === 'shout-effect' ? 'shout-effect-background' : ''}`}>
       {/* 第一層：22.jpg - 初始淡入，z-index: 1 */}
       <img 
         src={`${process.env.PUBLIC_URL || ''}/images/backgrounds/22.jpg`}
@@ -118,6 +119,7 @@ function Chapter2() {
           onComplete={handleComplete}
           isEndingBA={isEndingBA}
           hideParticles={hideParticles}
+          onNodeChange={setCurrentDialogueClass}
         />
       )}
 
@@ -126,8 +128,15 @@ function Chapter2() {
         <div className={`ending-fade-out-overlay ${isEndingBA ? 'ending-b-a-fade' : ''}`}></div>
       )}
       
-      {/* Long Press Back to Login Component */}
-      <LongPressBackToLogin />
+      {/* Long Press Back to Login Component - 第二章專用白色樣式（左下偏移、放大） */}
+      <LongPressBackToLogin 
+        position="custom"
+        customPosition={{ right: '100px', top: '80px' }}
+        textColor="#ffffff"
+        progressColor="#ffffff"
+        progressBgColor="rgba(255, 255, 255, 0.3)"
+        scale={1.3}
+      />
     </div>
   );
 }

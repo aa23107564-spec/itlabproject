@@ -622,6 +622,61 @@
   90% { transform: translate(-3px, -2px); }
 }
 
+/* 背景震動動畫（慢慢放大、抖動、慢慢縮回） */
+@keyframes shakeBackground {
+  0% { 
+    transform: scale(1) translate(0, 0); 
+  }
+  5% {
+    transform: scale(1.01) translate(0, 0);
+  }
+  10% { 
+    transform: scale(1.02) translate(-3px, -2px); 
+  }
+  15% {
+    transform: scale(1.03) translate(3px, 2px);
+  }
+  20% { 
+    transform: scale(1.04) translate(-3px, 2px); 
+  }
+  25% {
+    transform: scale(1.05) translate(3px, -2px);
+  }
+  30% { 
+    transform: scale(1.05) translate(-3px, -2px); 
+  }
+  40% { 
+    transform: scale(1.05) translate(3px, 2px); 
+  }
+  50% { 
+    transform: scale(1.05) translate(-3px, 2px); 
+  }
+  60% { 
+    transform: scale(1.05) translate(3px, -2px); 
+  }
+  70% { 
+    transform: scale(1.05) translate(-3px, -2px); 
+  }
+  75% {
+    transform: scale(1.04) translate(3px, 2px);
+  }
+  80% { 
+    transform: scale(1.03) translate(-3px, 0px); 
+  }
+  85% {
+    transform: scale(1.02) translate(2px, 0px);
+  }
+  90% { 
+    transform: scale(1.01) translate(-1px, 0px); 
+  }
+  95% {
+    transform: scale(1) translate(0, 0);
+  }
+  100% { 
+    transform: scale(1) translate(0, 0); 
+  }
+}
+
 /* 大喊效果：文字加大加粗 + 對話框震動 */
 .shout-effect .chatbox-me__text,
 .shout-effect .chatbox-editor__text {
@@ -633,6 +688,11 @@
 .shout-effect .chatbox-me__container,
 .shout-effect .chatbox-editor__container {
   animation: shake 0.5s ease-in-out;
+}
+
+/* 大喊效果的背景抖動 */
+.shout-effect-background .visual-novel-background {
+  animation: shakeBackground 0.5s ease-in-out;
 }
 
 /* 斜体样式（用於內心獨白） */

@@ -13,7 +13,7 @@ import '../../styles/visualNovel.css';
  * - 鍵盤控制（左右方向鍵）
  * - 歷史記錄與回退
  */
-const VisualNovelEngine = ({ script, onComplete, isEndingBA = false, hideParticles = false }) => {
+const VisualNovelEngine = ({ script, onComplete, isEndingBA = false, hideParticles = false, onNodeChange = null }) => {
   // 狀態管理
   const [currentBranch, setCurrentBranch] = useState('opening');
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -428,7 +428,7 @@ const VisualNovelEngine = ({ script, onComplete, isEndingBA = false, hideParticl
   }, [currentNode, currentBranch, currentIndex, script]);
 
   /**
-   * 鍵盤事件處理
+   * 鍵盤事件處理 - 使用延遲檢測機制區分單鍵和組合鍵
    */
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -437,21 +437,58 @@ const VisualNovelEngine = ({ script, onComplete, isEndingBA = false, hideParticl
         e.preventDefault();
       }
 
+      // 檢查是否同時按下左鍵+右鍵（組合鍵檢測）
+      const gameInteractionBlocked = window.gameInteractionBlocked || false;
+      const combinationDetected = window.combinationDetected || false;
+      
+      // 如果檢測到組合鍵，不執行任何遊戲操作
+      if (gameInteractionBlocked || combinationDetected) {
+        return;
+      }
+
       // 如果當前是選項模式
       if (currentNode && currentNode.type === 'choice') {
         if (e.key === 'ArrowLeft') {
-          setSelectedChoice(0);
-          setIsChoicePressed(true);
+          // 延遲 50ms 後執行，以檢測是否是組合鍵
+          setTimeout(() => {
+            const blocked = window.gameInteractionBlocked || false;
+            const detected = window.combinationDetected || false;
+            if (!blocked && !detected) {
+              setSelectedChoice(0);
+              setIsChoicePressed(true);
+            }
+          }, 50);
         } else if (e.key === 'ArrowRight') {
-          setSelectedChoice(1);
-          setIsChoicePressed(true);
+          // 延遲 50ms 後執行，以檢測是否是組合鍵
+          setTimeout(() => {
+            const blocked = window.gameInteractionBlocked || false;
+            const detected = window.combinationDetected || false;
+            if (!blocked && !detected) {
+              setSelectedChoice(1);
+              setIsChoicePressed(true);
+            }
+          }, 50);
         }
       } else {
         // 對話模式
         if (e.key === 'ArrowRight') {
-          goNext();
+          // 延遲 50ms 後執行，以檢測是否是組合鍵
+          setTimeout(() => {
+            const blocked = window.gameInteractionBlocked || false;
+            const detected = window.combinationDetected || false;
+            if (!blocked && !detected) {
+              goNext();
+            }
+          }, 50);
         } else if (e.key === 'ArrowLeft') {
-          goBack();
+          // 延遲 50ms 後執行，以檢測是否是組合鍵
+          setTimeout(() => {
+            const blocked = window.gameInteractionBlocked || false;
+            const detected = window.combinationDetected || false;
+            if (!blocked && !detected) {
+              goBack();
+            }
+          }, 50);
         }
       }
     };
@@ -481,6 +518,11 @@ const VisualNovelEngine = ({ script, onComplete, isEndingBA = false, hideParticl
    * 當節點變化時，啟動打字機效果或保存對話節點或處理動畫
    */
   useEffect(() => {
+    // 通知父組件節點已變化（傳遞 className）
+    if (onNodeChange && currentNode) {
+      onNodeChange(currentNode.className || '');
+    }
+
     if (currentNode && currentNode.type === 'dialogue' && currentNode.text) {
       startTypewriter(currentNode.text);
       // 保存完整的對話節點（包含完整文字），用於選項顯示時展示
@@ -529,7 +571,7 @@ const VisualNovelEngine = ({ script, onComplete, isEndingBA = false, hideParticl
         clearTimeout(typewriterTimer.current);
       }
     };
-  }, [currentNode, startTypewriter, currentDialogues]);
+  }, [currentNode, startTypewriter, currentDialogues, onNodeChange]);
 
   /**
    * 處理 pauseNext 暫停功能

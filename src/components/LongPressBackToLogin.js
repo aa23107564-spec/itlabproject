@@ -11,7 +11,13 @@ const LongPressBackToLogin = ({
   revealDelayMs = 500,
   confirmHoldMs = 1000,
   enabledPaths = ['/chapter1', '/chapter2', '/chapter3'],
-  zIndex = 9999
+  zIndex = 9999,
+  position = 'bottom-right', // 'bottom-right' 或 'top-right' 或 'custom'
+  textColor = '#374151', // 預設深灰色
+  progressColor = '#6b7280', // 預設灰色
+  progressBgColor = '#e5e7eb', // 預設淺灰色
+  customPosition = null, // 自定義位置 { right, top, left, bottom }
+  scale = 1 // 縮放比例，預設為 1（100%）
 }) => {
   const { state, progress, isEnabled, isGameInteractionBlocked, isCombinationDetected } = useLongPressEnter({
     loginPath,
@@ -50,19 +56,30 @@ const LongPressBackToLogin = ({
     }
   };
 
+  // 根據 position 屬性決定位置
+  let positionStyle;
+  if (position === 'custom' && customPosition) {
+    positionStyle = customPosition;
+  } else if (position === 'top-right') {
+    positionStyle = { right: '16px', top: '16px' };
+  } else {
+    positionStyle = { right: '216px', bottom: '31px' };
+  }
+
   return (
     <div
       style={{
         position: 'absolute',
-        right: '216px',
-        bottom: '31px',
+        ...positionStyle,
         zIndex,
         opacity: state === 'revealing' ? 0.7 : 1,
         transition: 'opacity 0.2s ease-in-out',
         pointerEvents: 'none',
         display: 'flex',
         alignItems: 'center',
-        gap: '8px'
+        gap: '8px',
+        transform: `scale(${scale})`,
+        transformOrigin: 'top right'
       }}
     >
       {/* Circular Progress Bar */}
@@ -83,7 +100,7 @@ const LongPressBackToLogin = ({
             cx="16"
             cy="16"
             r={radius}
-            stroke="#e5e7eb"
+            stroke={progressBgColor}
             strokeWidth="2.5"
             fill="none"
           />
@@ -92,7 +109,7 @@ const LongPressBackToLogin = ({
             cx="16"
             cy="16"
             r={radius}
-            stroke="#6b7280"
+            stroke={progressColor}
             strokeWidth="2.5"
             fill="none"
             strokeDasharray={strokeDasharray}
@@ -109,7 +126,7 @@ const LongPressBackToLogin = ({
       <span
         style={{
           fontSize: '12px',
-          color: '#374151',
+          color: textColor,
           fontWeight: '500',
           whiteSpace: 'nowrap',
           fontFamily: '点点像素体-方形, monospace'
