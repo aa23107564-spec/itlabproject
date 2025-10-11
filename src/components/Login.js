@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';  
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import BrainAnimationCustom from './BrainAnimationCustom';
 
 function Login() {
   const [inputValue, setInputValue] = useState('');
@@ -108,7 +109,7 @@ function Login() {
             />
           ))}
         </div>
-        <div style={{ fontSize: '18px', color: '#666', fontFamily: '点点像素体-方形, monospace' }}>加載中...</div>
+        <div style={{ fontSize: '24px', color: '#666', fontFamily: '点点像素体-方形, monospace' }}>加載中...</div>
       </div>
     );
   }
@@ -124,23 +125,8 @@ function Login() {
       flexDirection: 'column',
       overflow: 'hidden'
     }}>
-      {/* 圖檔放置處 */}
-      <div style={{
-        width: '100px',
-        height: '100px',
-        backgroundColor: '#e0e0e0',
-        border: '2px dashed #999',
-        borderRadius: '8px',
-        marginBottom: '20px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: '#999',
-        fontSize: '14px',
-        fontFamily: '点点像素体-方形, monospace'
-      }}>
-        圖檔放置處
-      </div>
+      {/* 腦部動畫 - 自訂 UI */}
+      <BrainAnimationCustom />
 
       {/* 標題 */}
       <h1 style={{
