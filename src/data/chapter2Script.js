@@ -39,31 +39,45 @@ const chapter2Script = {
       type: 'dialogue',
       speaker: 'protagonist',
       text: '......',
+      next: 'opening-5-animation'
+    },
+    {
+      id: 'opening-5-animation',
+      type: 'animation',
+      animationType: 'drinkCoffee',
+      duration: 2500,
       next: 'opening-6'
     },
     {
       id: 'opening-6',
       type: 'dialogue',
       speaker: 'protagonist',
-      text: '因為我一定要不普通才行嗎？',
+      text: '......',
       next: 'opening-7'
     },
     {
       id: 'opening-7',
       type: 'dialogue',
-      speaker: 'editor',
-      text: '倒也沒那回事。',
+      speaker: 'protagonist',
+      text: '因為我一定要不普通才行嗎？',
       next: 'opening-8'
     },
     {
       id: 'opening-8',
       type: 'dialogue',
       speaker: 'editor',
-      text: '但是，你明白嗎？\n擁有只屬於自己世界，\n再把它毫無保留地丟到別人眼前——',
+      text: '倒也沒那回事。',
       next: 'opening-9'
     },
     {
       id: 'opening-9',
+      type: 'dialogue',
+      speaker: 'editor',
+      text: '但是，你明白嗎？\n擁有只屬於自己世界，\n再把它毫無保留地丟到別人眼前——',
+      next: 'opening-10'
+    },
+    {
+      id: 'opening-10',
       type: 'dialogue',
       speaker: 'editor',
       text: '這種事情不是每個人都能做到的。',
@@ -119,28 +133,28 @@ const chapter2Script = {
       id: 'branch-a-5',
       type: 'dialogue',
       speaker: 'editor',
-      text: '難道你以為你寫了一個普通的故事，\n就會得到一雙普通的眼睛嗎？',
+      text: '<slow>......</slow>難道你以為你寫了一個普通的故事，\n就會得到一雙普通的眼睛嗎？',
       next: 'branch-a-6'
     },
     {
       id: 'branch-a-6',
       type: 'dialogue',
       speaker: 'protagonist',
-      text: '不試試看怎麼知道？',
+      text: '<slow>...</slow>不試試看怎麼知道？',
       next: 'branch-a-7'
     },
     {
       id: 'branch-a-7',
       type: 'dialogue',
       speaker: 'editor',
-      text: '好吧，那你說說看，\n對你來說普通到底是什麼？',
+      text: '好吧，那你說說看，\n對你來說，「普通」到底是什麼？',
       next: 'branch-a-8'
     },
     {
       id: 'branch-a-8',
       type: 'dialogue',
       speaker: 'protagonist',
-      text: '普通人......大概照著鏡子的時候，\n都能理所當然地相信自己確實和鏡中的那個人長得是一樣的吧。',
+      text: '<slow>普通人......</slow>大概照著鏡子的時候，\n都能理所當然地相信自己確實和鏡中的那個人長得是一樣的吧。',
       next: 'branch-a-9'
     },
     {
@@ -154,21 +168,21 @@ const chapter2Script = {
       id: 'branch-a-10',
       type: 'dialogue',
       speaker: 'editor',
-      text: '其實你現在不是也很清楚嗎？\n知道自己正在咖啡廳，和你的編輯討論著下本書的事......',
+      text: '其實你現在不是也很清楚嗎？\n知道自己正在咖啡廳，和你的編輯<slow>討論著下本書的事......</slow>',
       next: 'branch-a-11'
     },
     {
       id: 'branch-a-11',
       type: 'dialogue',
       speaker: 'editor',
-      text: '難道這些事不從別人的嘴裡聽到，\n你就沒辦法知道嗎？',
+      text: '難道這些事不從別人的嘴裡聽到，\n你..<slow>.就沒辦法知道嗎？</slow>',
       next: 'branch-a-12'
     },
     {
       id: 'branch-a-12',
       type: 'dialogue',
       speaker: 'protagonist',
-      text: '知道是知道！我現在是知道的，',
+      text: '<strong>知道是知道！</strong>我現在是知道的，',
       next: 'branch-a-13'
     },
     {
@@ -189,7 +203,7 @@ const chapter2Script = {
       id: 'branch-a-15',
       type: 'dialogue',
       speaker: 'protagonist',
-      text: '我曾經也很篤定這是屬於我的路，\n但是......安全感真的是我該一輩子抓著不放的東西嗎？',
+      text: '我曾經也很篤定這是屬於我的路，\n但是<slow>......</slow>安全感真的是我該一輩子抓著不放的東西嗎？',
       next: 'branch-a-16'
     },
     {
@@ -203,7 +217,7 @@ const chapter2Script = {
       id: 'branch-a-17',
       type: 'dialogue',
       speaker: 'editor',
-      text: '這樣難道還不足以說服你，這就是獨一無二的『你』嗎？',
+      text: '這樣難道還不足以說服你，這就是<slow><strong>獨一無二的「你」</strong></slow>嗎？',
       next: 'branch-a-18'
     },
     {
@@ -217,14 +231,14 @@ const chapter2Script = {
       id: 'branch-a-19',
       type: 'dialogue',
       speaker: 'protagonist',
-      text: '但是，這些只是我『聽到的』我，\n我到底要怎麼『看到』我？',
+      text: '但是，這些只是我「聽到的」我，\n我到底要怎麼「看到」我？',
       next: 'branch-a-20'
     },
     {
       id: 'branch-a-20',
       type: 'dialogue',
       speaker: 'editor',
-      text: '......好吧，那你就去看看吧，去看看你自己。',
+      text: '<slow>......</slow>好吧，那你就去看看吧，去看看你自己。',
       next: 'branch-a-21'
     },
     {
@@ -238,7 +252,7 @@ const chapter2Script = {
       id: 'branch-a-22',
       type: 'dialogue',
       speaker: 'editor',
-      text: ' 我所看見的你，就是你一直掛在嘴邊的『自己』。',
+      text: ' 我所看見的你，就是你一直掛在嘴邊的「自己」。',
       next: 'choice-2-a'
     },
     {
@@ -285,7 +299,7 @@ const chapter2Script = {
       id: 'branch-b-4',
       type: 'dialogue',
       speaker: 'protagonist',
-      text: '這樣的我...<strong>難道不能被稱作是一個『普通人』嗎？</strong>',
+      text: '這樣的我<slow>...<strong>難道不能</slow>被稱作是一個『普通人』嗎？</strong>',
       next: 'branch-b-5'
     },
     {
@@ -299,14 +313,14 @@ const chapter2Script = {
       id: 'branch-b-6',
       type: 'dialogue',
       speaker: 'editor',
-      text: '我從沒有說過你不是普通人啊。',
+      text: '我從沒說過你不是普通人啊。',
       next: 'branch-b-7'
     },
     {
       id: 'branch-b-7',
       type: 'dialogue',
       speaker: 'protagonist',
-      text: '那為什麼...<strong>我不能寫一個普通的故事！</strong>',
+      text: '<slow>那為什麼...</slow><strong>我不能寫一個普通的故事！</strong>',
       next: 'branch-b-8'
     },
     {
@@ -320,28 +334,28 @@ const chapter2Script = {
       id: 'branch-b-9',
       type: 'dialogue',
       speaker: 'protagonist',
-      text: '只因為我能看到的比別人多，即使普通才是我想要的，\n我也沒有權利去普通地看見些什麼嗎？',
+      text: '<slow>......</slow>只因為我能看到的比別人多，即使普通才是我想要的，\n我也沒有權利去普通地看見些什麼嗎？',
       next: 'branch-b-10'
     },
     {
       id: 'branch-b-10',
       type: 'dialogue',
       speaker: 'editor',
-      text: '並不是沒有權利，而是你沒有這種能力。',
+      text: '並不是沒有權利，而是<slow>你沒有這種能力。</slow>',
       next: 'branch-b-11'
     },
     {
       id: 'branch-b-11',
       type: 'dialogue',
       speaker: 'editor',
-      text: '舉例來說好了，你看到的現在你眼前的我，是什麼模樣？形容看看吧。',
+      text: '舉例來說好了，你所看到的正在你眼前的我，是什麼模樣？形容看看吧。',
       next: 'branch-b-12'
     },
     {
       id: 'branch-b-12',
       type: 'dialogue',
       speaker: 'protagonist',
-      text: '就是......很普通啊！\n有眼睛、有嘴巴、有......鼻子！對！有鼻子！就是這樣。',
+      text: '就是<slow>......</slow>很普通啊！\n有眼睛、有嘴巴、有<slow>......</slow>鼻子！對！有鼻子！就是這樣。',
       next: 'branch-b-13'
     },
     {
@@ -362,21 +376,21 @@ const chapter2Script = {
       id: 'branch-b-15',
       type: 'dialogue',
       speaker: 'editor',
-      text: '你確定你看到的真的是這樣子嗎？',
+      text: '你確定<slow>你所看到的真的是這樣子嗎？</slow>',
       next: 'branch-b-16'
     },
     {
       id: 'branch-b-16',
       type: 'dialogue',
       speaker: 'protagonist',
-      text: '當然了！',
+      text: '<strong>當然了！</strong>',
       next: 'branch-b-17'
     },
     {
       id: 'branch-b-17',
       type: 'dialogue',
       speaker: 'editor',
-      text: '那你現在形容看看，我的鼻子是高挺還是扁塌、嘴唇是乾燥還是濕潤、以及我的眼睛是細長還是圓潤。',
+      text: '那你現在形容看看，我的鼻子<slow>是高挺還是扁塌</slow>、嘴唇<slow>是乾燥還是濕潤</slow>、還有<slow>...</slow>我的眼睛<slow>是細長還是圓潤</slow>。',
       next: 'branch-b-18'
     },
     {
@@ -474,7 +488,7 @@ const chapter2Script = {
       id: 'branch-b-31',
       type: 'dialogue',
       speaker: 'editor',
-      text: '好，那你閉上眼吧。如果你想寫出普通，那就去寫吧！\n等到最後你會發現，那並不是你該追求的方向。',
+      text: '好，那你閉上眼吧。如果你想寫出普通，那就去寫吧！',
       next: 'branch-b-32'
     },
     {
@@ -538,7 +552,7 @@ const chapter2Script = {
       id: 'ending-a-b-2',
       type: 'dialogue',
       speaker: 'protagonist',
-      text: '...難道你不相信我剛剛說的那些嗎？',
+      text: '<slow>...</slow>難道你不相信我剛剛說的那些嗎？',
       next: 'ending-a-b-3'
     },
     {
@@ -559,21 +573,21 @@ const chapter2Script = {
       id: 'ending-a-b-5',
       type: 'dialogue',
       speaker: 'protagonist',
-      text: '什麼事？',
+      text: '<slow>什麼事？</slow>',
       next: 'ending-a-b-6'
     },
     {
       id: 'ending-a-b-6',
       type: 'dialogue',
       speaker: 'editor',
-      text: '不只是你，我們所有人，都並沒有什麼自己的眼睛。\n我的眼睛就是你的眼睛。',
+      text: '不只是你，我們所有人，都<slow>並沒有什麼自己的眼睛</slow>。\n<slow><strong>我的眼睛就是你的眼睛。</strong></slow>',
       next: 'ending-a-b-7'
     },
     {
       id: 'ending-a-b-7',
       type: 'dialogue',
       speaker: 'editor',
-      text: '或許你看到的我，\n是「一團質地不良且色彩不鮮，\n讓人看了毫無食慾的麵團」。',
+      text: '或許你看到的我，\n是<strong>「一團質地不良且色彩不鮮，\n讓人看了毫無食慾的麵團」</strong>。',
       next: 'ending-a-b-8'
     },
     {
@@ -587,7 +601,7 @@ const chapter2Script = {
       id: 'ending-a-b-9',
       type: 'dialogue',
       speaker: 'protagonist',
-      text: '......為什麼啊？',
+      text: '<slow>......</slow>為什麼啊？',
       next: 'ending-a-b-10'
     },
     {
@@ -608,32 +622,32 @@ const chapter2Script = {
       id: 'ending-a-b-12',
       type: 'dialogue',
       speaker: 'editor',
-      text: '想透過自己的眼睛看見自己這種事，\n只要是人，都是無能為力的。',
+      text: '想透過自己的眼睛看見自己這種事，\n只要是人，<slow>都是無能為力的。</slow>',
       next: 'ending-a-b-13'
     },
     {
       id: 'ending-a-b-13',
       type: 'dialogue',
       speaker: 'protagonist',
-      text: '我不想接受這種說法。',
+      text: '<slow>......</slow>我不想接受這種說法。',
       next: 'ending-a-b-14'
     },
     {
       id: 'ending-a-b-14',
       type: 'dialogue',
       speaker: 'editor',
-      text: '...好吧，那就跟隨你的意志繼續尋找答案吧。',
+      text: '<slow>...</slow>好吧，那就跟隨你的意志繼續尋找答案吧。',
       next: 'ending-a-b-15'
     },
     {
-      id: 'ending-a-b-13',
+      id: 'ending-a-b-15',
       type: 'dialogue',
       speaker: 'editor',
       text: '如果有一天，你真的找到了屬於你自己的眼睛——',
-      next: 'ending-a-b-14'
+      next: 'ending-a-b-16'
     },
     {
-      id: 'ending-a-b-14',
+      id: 'ending-a-b-16',
       type: 'dialogue',
       speaker: 'editor',
       text: '那麼，也告訴我一聲吧。',
@@ -721,7 +735,7 @@ const chapter2Script = {
       id: 'ending-b-b-4',
       type: 'dialogue',
       speaker: 'protagonist',
-      text: '你口口聲聲說著我並非『不是普通人』，卻要我閉上雙眼才能接近普通。',
+      text: '你口口聲聲說著我並非<slow>「不是普通人」</slow>，卻要我閉上雙眼才能接近普通。',
       next: 'end'
     }
   ],

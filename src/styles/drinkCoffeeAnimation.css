@@ -1,0 +1,20 @@
+.drink-coffee-animation {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 5; /* 在背景圖片之上，但在對話框之下 */
+  pointer-events: none;
+}
+
+.drink-coffee-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+
