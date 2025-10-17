@@ -16,27 +16,38 @@ function AppContent() {
 
   return (
     <div 
-      className="app-container"
+      className="app-wrapper"
       style={{
-        transform: shouldUse43Scaling ? `scale(${scale})` : 'none',
-        transformOrigin: 'center',
-        width: shouldUse43Scaling ? '1024px' : '100vw',
-        height: shouldUse43Scaling ? '768px' : '100vh',
-        margin: shouldUse43Scaling ? 'auto' : '0',
+        width: '100vw',
+        height: '100vh',
+        backgroundColor: '#000',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
         overflow: 'hidden'
       }}
     >
-      <div className="App" style={{
-        width: '100%',
-        height: '100%'
-      }}>
-        <Routes>
-          <Route path="/" element={<Login />} />
-          <Route path="/chapter1" element={<Chapter1 />} />
-          <Route path="/chapter2" element={<Chapter2 />} />
-          <Route path="/chapter3" element={<Chapter3 />} />
-          <Route path="/test" element={<TestPage />} />
-        </Routes>
+      <div 
+        className="app-container"
+        style={{
+          width: shouldUse43Scaling ? `${window.innerHeight * (4/3)}px` : '100vw',
+          height: shouldUse43Scaling ? '100vh' : '100vh',
+          overflow: 'hidden',
+          position: 'relative'
+        }}
+      >
+        <div className="App" style={{
+          width: '100%',
+          height: '100%'
+        }}>
+          <Routes>
+            <Route path="/" element={<Login />} />
+            <Route path="/chapter1" element={<Chapter1 />} />
+            <Route path="/chapter2" element={<Chapter2 />} />
+            <Route path="/chapter3" element={<Chapter3 />} />
+            <Route path="/test" element={<TestPage />} />
+          </Routes>
+        </div>
       </div>
     </div>
   );

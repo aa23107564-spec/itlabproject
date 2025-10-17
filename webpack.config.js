@@ -76,6 +76,9 @@ module.exports = {
     compress: true,
     port: 3000,
     open: true,
+    historyApiFallback: {
+      index: '/itlabproject/'
+    },
   },
   resolve: {
     extensions: ['.js', '.jsx'],

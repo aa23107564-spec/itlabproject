@@ -17,27 +17,18 @@ export const use43Fullscreen = () => {
       const containerWidth = 1024;
       const containerHeight = 768;
       
-      // 計算視窗的寬高比
-      const viewportRatio = viewportWidth / viewportHeight;
-      const containerRatio = containerWidth / containerHeight; // 4:3 = 1.333...
+      // 計算縮放比例，優先填滿高度（上下邊界）
+      const scaleByHeight = viewportHeight / containerHeight;
+      const scaleByWidth = viewportWidth / containerWidth;
       
-      // 如果是 4:3 螢幕（比例接近 1.333），則填滿整個螢幕
-      if (Math.abs(viewportRatio - containerRatio) < 0.1) {
-        // 4:3 螢幕：計算填滿螢幕的縮放比例
-        const scaleX = viewportWidth / containerWidth;
-        const scaleY = viewportHeight / containerHeight;
-        const fullscreenScale = Math.min(scaleX, scaleY);
-        setScale(fullscreenScale);
-      } else {
-        // 非 4:3 螢幕：保持原始尺寸，周圍顯示黑邊
-        setScale(1);
-      }
+      // 始終按高度縮放以填滿上下邊界，維持4:3比例
+      setScale(scaleByHeight);
     };
 
     // 初始計算
     calculateScale();
 
-    // 監聽視窗大小變化（僅用於全螢幕切換）
+    // 監聽視窗大小變化
     window.addEventListener('resize', calculateScale);
 
     return () => {

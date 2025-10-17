@@ -14,7 +14,7 @@
   --ui-font: Tahoma, "Microsoft JhengHei", Arial, sans-serif;
 }
 
-/* 固定畫布：1024x768，不響應式 */
+/* 動態畫布：根據容器尺寸調整 */
 .word2003-canvas {
   width: 100%;
   height: 100%;
@@ -25,6 +25,8 @@
   color: var(--text-color);
   user-select: none;
   overflow: hidden; /* 禁止捲動與溢出 */
+  display: flex;
+  flex-direction: column;
 }
 
 /* 視窗外框與標題列 */

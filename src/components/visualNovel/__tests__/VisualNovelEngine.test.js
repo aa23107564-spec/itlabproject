@@ -344,3 +344,4 @@ describe('VisualNovelEngine', () => {
     expect(() => unmount()).not.toThrow();
   });
 });
+

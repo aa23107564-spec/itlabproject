@@ -186,3 +186,4 @@ describe('Chapter2 Component', () => {
     expect(() => unmount()).not.toThrow();
   });
 });
+
