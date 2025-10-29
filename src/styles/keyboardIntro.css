@@ -1,13 +1,8 @@
 /* 鍵盤引導頁面樣式 */
 
 /* 点点像素体-方形 字體 */
-@font-face {
-  font-family: '点点像素体-方形';
-  src: url('../../public/fonts/点点像素体-方形.ttf') format('truetype');
-  font-weight: normal;
-  font-style: normal;
-  font-display: swap;
-}
+/* 不使用 @font-face 載入本地檔案，改為使用已安裝的字體或系統字體回退 */
+/* 如果電腦已安裝 '点点像素体-方形'，會自動使用；否則使用系統等寬字體 */
 
 .keyboard-intro-page {
   position: fixed;
