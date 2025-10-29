@@ -1,6 +1,4 @@
-/* 暫時使用系統字體替代 */
-/* 点点像素体-方形 字體 - 暫時註解掉因為檔案太大 (15.9MB) */
-/*
+/* 点点像素体-方形 字體 */
 @font-face {
   font-family: '点点像素体-方形';
   src: url('../../public/fonts/点点像素体-方形.ttf') format('truetype');
@@ -8,7 +6,6 @@
   font-style: normal;
   font-display: swap;
 }
-*/
 
 /* 使用系統字體作為替代 */
 .font-pixel {

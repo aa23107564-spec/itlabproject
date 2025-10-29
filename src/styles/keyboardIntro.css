@@ -1,0 +1,263 @@
+/* 鍵盤引導頁面樣式 */
+
+/* 点点像素体-方形 字體 */
+@font-face {
+  font-family: '点点像素体-方形';
+  src: url('../../public/fonts/点点像素体-方形.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+.keyboard-intro-page {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  overflow: hidden;
+  /* 确保立即可见，避免闪现 */
+  opacity: 1;
+}
+
+.keyboard-intro-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  /* 移除淡入动画，确保内容立即可见，避免闪现登录页面 */
+  opacity: 1;
+}
+
+/* 鍵盤和標籤容器 */
+.keyboard-with-labels {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.keyboard-icon {
+  width: auto;
+  height: auto;
+  max-width: 80vw;
+  max-height: 80vh;
+  object-fit: contain;
+  animation: floatAnimation 3s ease-in-out infinite;
+}
+
+/* 鍵盤標籤定位 */
+.keyboard-label {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.keyboard-label-left {
+  top: 160px;
+  left: 41%;
+  transform: translateX(-50%);
+  gap: 4px;
+}
+
+.keyboard-label-center {
+  top: 160px;
+  left: 50%;
+  transform: translateX(-50%);
+  flex-direction: column;
+  gap: 0px;
+}
+
+.keyboard-label-right {
+  top: 160px;
+  right: 41%;
+  transform: translateX(50%);
+  gap: 4px;
+}
+
+/* 文字樣式 */
+.keyboard-text {
+  font-family: '点点像素体-方形', 'DotGothic16', monospace, sans-serif;
+  font-size: 16px;
+  color: #333333;
+  font-weight: normal;
+  animation: textFloatAnimation 2.5s ease-in-out infinite;
+  text-shadow: 1px 1px 0px #ffffff, -1px -1px 0px #ffffff, 1px -1px 0px #ffffff, -1px 1px 0px #ffffff;
+  white-space: pre;
+  font-display: swap;
+}
+
+/* 箭頭樣式 */
+.keyboard-arrow {
+  font-size: 20px;
+  color: #333333;
+}
+
+/* 中間文字樣式 */
+.keyboard-label-center .keyboard-text {
+  font-size: 20px;
+  color: #333333;
+}
+
+/* 箭頭文字樣式 - 向下偏移120px，黑色 */
+/* 第三章：第三個子元素 */
+.keyboard-label-center .keyboard-text:nth-child(3) {
+  margin-top: 120px;
+  color: #333333;
+}
+
+/* 第一章和第二章：唯一的子元素，需要更大的向下偏移以匹配第三章的位置 */
+.keyboard-label-center .keyboard-text:only-child {
+  margin-top: 175px;
+  color: #333333;
+}
+
+/* 退回首頁文字樣式 - 回到原位置 */
+.keyboard-label-center .keyboard-text:nth-child(4) {
+  margin-top: 0px;
+}
+
+/* 按下任意鍵開始文字樣式 - 恢復閃爍動畫 */
+.keyboard-text-container .keyboard-text.keyboard-instruction {
+  animation: textFloatAnimation 2s ease-in-out infinite, blinkAnimation 3s ease-in-out infinite;
+  animation-delay: 0.6s;
+}
+
+/* 底部說明文字 */
+.keyboard-text-container {
+  margin-top: -60px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.keyboard-instruction {
+  font-family: '点点像素体-方形', 'DotGothic16', monospace, sans-serif;
+  font-size: 20px;
+  color: #a8a8a8;
+  font-weight: normal;
+  animation: textFloatAnimation 2s ease-in-out infinite, blinkAnimation 3s ease-in-out infinite;
+  animation-delay: 0.6s;
+  font-display: swap;
+}
+
+/* 為不同的文字添加不同的動畫延遲 */
+.keyboard-label-left .keyboard-text {
+  animation-delay: 0s;
+}
+
+.keyboard-label-center .keyboard-text:nth-child(1) {
+  animation-delay: 0.2s;
+}
+
+.keyboard-label-center .keyboard-text:nth-child(2) {
+  animation-delay: 0.4s;
+}
+
+.keyboard-label-right .keyboard-text {
+  animation-delay: 0.1s;
+}
+
+/* 淡入動畫 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 浮動動畫（圖標） */
+@keyframes floatAnimation {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+/* 文字浮動動畫 */
+@keyframes textFloatAnimation {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+/* 閃爍動畫 */
+@keyframes blinkAnimation {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+/* 淡出動畫（用於跳過時） */
+.keyboard-intro-page.fade-out {
+  animation: fadeOut 0.3s ease-in-out forwards;
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* 內容吸入動畫 */
+.keyboard-intro-content.suck-in-content {
+  animation: suckInContent 3s ease-out forwards;
+}
+
+@keyframes suckInContent {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(3);
+    opacity: 0;
+  }
+}
+
+/* 全黑覆蓋層 */
+.black-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: #000000;
+  z-index: 10001; /* 確保在所有內容之上 */
+  pointer-events: none; /* 不阻擋事件 */
+}
+
+/* 覆蓋層淡入動畫 */
+.black-overlay.fade-in-overlay {
+  animation: fadeInBlackOverlay 3s ease-in-out forwards;
+}
+
+@keyframes fadeInBlackOverlay {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+

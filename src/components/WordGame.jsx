@@ -43,7 +43,7 @@ const gameData = [
   }
 ];
 
-export default function WordGame() {
+export default function WordGame({ startDelay = 2000 }) {
   const [currentParagraph, setCurrentParagraph] = useState(0);
   const [displayedText, setDisplayedText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -354,10 +354,10 @@ export default function WordGame() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsTyping(true);
-    }, 2000); // 停頓2秒後開始打字動畫
+    }, startDelay); // 使用傳入的延遲時間
     
     return () => clearTimeout(timer);
-  }, []);
+  }, [startDelay]);
 
   // 渲染文字內容
   const renderText = () => {

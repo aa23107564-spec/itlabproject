@@ -9,7 +9,7 @@
     <script>
         // GitHub Pages SPA 路由修正
         // 當訪問不存在的路徑時，重定向到 index.html 讓 React Router 處理
-        var segmentCount = 0;
+        var segmentCount = 1; // 保留 /itlabproject 路徑段
         var l = window.location;
         l.replace(
             l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
@@ -38,3 +38,4 @@
     </div>
 </body>
 </html>
+
