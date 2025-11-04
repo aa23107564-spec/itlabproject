@@ -102,12 +102,27 @@ function Light({ lightData }) {
 function Model({ modelPath, lightPath }) {
   const modelRef = useRef();
   const [lights, setLights] = useState([]);
+  const [error, setError] = useState(null);
   
-  // 加载主 GLB 模型
-  const { scene, animations } = useGLTF(modelPath);
+  // 加载主 GLB 模型（添加錯誤處理）
+  let scene, animations;
+  try {
+    const gltf = useGLTF(modelPath);
+    scene = gltf.scene;
+    animations = gltf.animations;
+  } catch (err) {
+    console.error('Failed to load model:', err);
+    setError(err);
+    return null;
+  }
   
   // 加载统一的灯光 GLB 文件
-  const lightModel = useGLTF(lightPath);
+  let lightModel;
+  try {
+    lightModel = useGLTF(lightPath);
+  } catch (err) {
+    console.error('Failed to load lights:', err);
+  }
   
   useEffect(() => {
     if (scene && lightModel.scene) {
@@ -244,11 +259,14 @@ function Model({ modelPath, lightPath }) {
 // 主要的 3D 查看器组件
 function Chapter1ModelViewer() {
   const [showInfo, setShowInfo] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
   
   // 5秒后隐藏提示信息
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowInfo(false);
+      setIsLoading(false);
     }, 5000);
     return () => clearTimeout(timer);
   }, []);
@@ -274,6 +292,17 @@ function Chapter1ModelViewer() {
         onCreated={({ gl }) => {
           // 使用配置文件中的曝光度设置
           gl.toneMappingExposure = Chapter1LightConfig.toneMappingExposure;
+          
+          // 處理 WebGL 上下文丟失和恢復
+          gl.domElement.addEventListener('webglcontextlost', (e) => {
+            console.warn('WebGL context lost - 可能是 GPU 記憶體不足');
+            e.preventDefault(); // 阻止預設行為，嘗試恢復
+          });
+          
+          gl.domElement.addEventListener('webglcontextrestored', () => {
+            console.log('WebGL context restored');
+            window.location.reload(); // 恢復後重新載入頁面
+          });
         }}
         style={{ 
           width: '100%', 
