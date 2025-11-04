@@ -102,27 +102,12 @@ function Light({ lightData }) {
 function Model({ modelPath, lightPath }) {
   const modelRef = useRef();
   const [lights, setLights] = useState([]);
-  const [error, setError] = useState(null);
   
-  // 加载主 GLB 模型（添加錯誤處理）
-  let scene, animations;
-  try {
-    const gltf = useGLTF(modelPath);
-    scene = gltf.scene;
-    animations = gltf.animations;
-  } catch (err) {
-    console.error('Failed to load model:', err);
-    setError(err);
-    return null;
-  }
+  // 加载主 GLB 模型（Hooks 必須在頂層調用）
+  const { scene, animations } = useGLTF(modelPath);
   
   // 加载统一的灯光 GLB 文件
-  let lightModel;
-  try {
-    lightModel = useGLTF(lightPath);
-  } catch (err) {
-    console.error('Failed to load lights:', err);
-  }
+  const lightModel = useGLTF(lightPath);
   
   useEffect(() => {
     if (scene && lightModel.scene) {
