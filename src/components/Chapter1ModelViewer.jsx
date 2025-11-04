@@ -10,6 +10,23 @@ function Light({ lightData }) {
                     Chapter1LightConfig.lightIntensityMultiplier;
   const intensity = lightData.intensity * multiplier;
   
+  // 调试：输出每个灯光的配置应用情况（只在第一次渲染时输出）
+  if (Chapter1LightConfig.debugMode && !window._lightDebugLogged) {
+    if (!window._lightDebugStarted) {
+      window._lightDebugStarted = true;
+      console.log('\n════════════════════════════════════════');
+      console.log('🔦 灯光配置加载信息');
+      console.log('配置版本:', Chapter1LightConfig.configVersion);
+      console.log('配置时间戳:', new Date(Chapter1LightConfig.lastUpdate).toLocaleTimeString());
+      console.log('════════════════════════════════════════\n');
+    }
+    console.log(`💡 ${lightData.name}:`, {
+      原始强度: lightData.intensity.toFixed(2),
+      系数: multiplier,
+      最终强度: intensity.toFixed(4)
+    });
+  }
+  
   switch (lightData.type) {
     case 'DirectionalLight':
       return (
@@ -165,13 +182,19 @@ function Model({ modelPath, lightPath }) {
               
               if (emissiveConfig && emissiveConfig[materialName] !== undefined) {
                 // 使用特定配置的绝对值
-                material.emissiveIntensity = emissiveConfig[materialName];
-                console.log(`  ✨ ${materialName}: 原始=${originalIntensity.toFixed(2)}, 设定=${emissiveConfig[materialName]}`);
+                const configValue = emissiveConfig[materialName];
+                material.emissiveIntensity = configValue;
+                // 确保发光颜色是白色或原始颜色
+                if (materialName.includes('螢幕') || materialName.includes('屏')) {
+                  material.emissive.setRGB(1, 1, 1); // 设置为白色发光
+                }
+                console.log(`  ✨ ${materialName}: 强度=${configValue}, 颜色=${material.emissive.getHexString()}`);
               } else if (materialName.includes('螢幕') || materialName.includes('屏')) {
-                // 螢幕材质 - 使用配置中的值或默认3.0
-                const screenIntensity = emissiveConfig && emissiveConfig['螢幕'] ? emissiveConfig['螢幕'] : 3.0;
+                // 螢幕材质 - 强制白色发光
+                const screenIntensity = emissiveConfig && emissiveConfig['螢幕'] ? emissiveConfig['螢幕'] : 10.0;
                 material.emissiveIntensity = screenIntensity;
-                console.log(`  📺 ${materialName}: 原始=${originalIntensity.toFixed(2)}, 设定=${screenIntensity}`);
+                material.emissive.setRGB(1, 1, 1); // 白色发光
+                console.log(`  📺 ${materialName}: 强度=${screenIntensity}, 颜色=白色(#ffffff)`);
               } else {
                 // 其他材质大幅降低发光
                 material.emissiveIntensity = originalIntensity * Chapter1LightConfig.emissiveMultiplier;
@@ -235,7 +258,7 @@ function Chapter1ModelViewer() {
       width: '100%',
       height: '100%',
       position: 'relative',
-      background: 'linear-gradient(135deg, #1e3a8a 0%, #312e81 100%)'
+      background: 'linear-gradient(135deg,rgb(67, 67, 67) 0%,rgb(35, 35, 35) 100%)'
     }}>
       {/* 3D Canvas */}
       <Canvas
@@ -303,22 +326,6 @@ function Chapter1ModelViewer() {
           <div>左鍵拖動：旋轉視角 | 滾輪：縮放 | 右鍵拖動：平移</div>
         </div>
       )}
-      
-      {/* 标题 */}
-      <div style={{
-        position: 'absolute',
-        bottom: '30px',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        color: 'white',
-        fontSize: '28px',
-        fontWeight: 'bold',
-        textShadow: '2px 2px 4px rgba(0,0,0,0.5)',
-        pointerEvents: 'none',
-        zIndex: 10
-      }}>
-        第一章 - 3D 場景
-      </div>
       
       <style>{`
         @keyframes fadeIn {
