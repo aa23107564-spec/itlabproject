@@ -263,8 +263,8 @@ function Chapter1ModelViewer() {
         
         {/* 加载模型和灯光 */}
         <Model 
-          modelPath="/images/glb/chpapter1.glb"
-          lightPath="/images/glb/light.glb"
+          modelPath={`${process.env.PUBLIC_URL || ''}/images/glb/chpapter1.glb`}
+          lightPath={`${process.env.PUBLIC_URL || ''}/images/glb/light.glb`}
         />
         
         {/* 轨道控制器 - 允许用户旋转、缩放、平移视图 */}
@@ -331,8 +331,8 @@ function Chapter1ModelViewer() {
 }
 
 // 预加载模型
-useGLTF.preload('/images/glb/chpapter1.glb');
-useGLTF.preload('/images/glb/light.glb');
+useGLTF.preload(`${process.env.PUBLIC_URL || ''}/images/glb/chpapter1.glb`);
+useGLTF.preload(`${process.env.PUBLIC_URL || ''}/images/glb/light.glb`);
 
 export default Chapter1ModelViewer;
 
