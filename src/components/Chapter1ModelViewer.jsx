@@ -315,7 +315,7 @@ function Chapter1ModelViewer() {
         
         {/* 加载模型和灯光 */}
         <Model 
-          modelPath={`${process.env.PUBLIC_URL || ''}/images/glb/chpapter1.glb`}
+          modelPath={`${process.env.PUBLIC_URL || ''}/images/glb/chpapter1-compressed.glb`}
           lightPath={`${process.env.PUBLIC_URL || ''}/images/glb/light.glb`}
         />
         
@@ -367,7 +367,7 @@ function Chapter1ModelViewer() {
 }
 
 // 预加载模型
-useGLTF.preload(`${process.env.PUBLIC_URL || ''}/images/glb/chpapter1.glb`);
+useGLTF.preload(`${process.env.PUBLIC_URL || ''}/images/glb/chpapter1-compressed.glb`);
 useGLTF.preload(`${process.env.PUBLIC_URL || ''}/images/glb/light.glb`);
 
 export default Chapter1ModelViewer;
