@@ -6,7 +6,7 @@
 
 const Chapter1LightConfig = {
   // 配置版本号和时间戳（确保配置更新）
-  configVersion: 36,
+  configVersion: 37,
   lastUpdate: Date.now(), // 时间戳
   
   // 默认灯光强度系数
@@ -15,23 +15,29 @@ const Chapter1LightConfig = {
   // 各灯光的强度系数（原始强度都很高，需要大幅降低）
   specificLights: {
     // 主场景灯光 - 统一到相近范围
-    '吊燈light': 0.00003,          // 吊灯 → 最终: 2.39
-    '檯燈light': 0.002,           // 台灯 → 最终: 0.52
-    '吉他light': 0.0005,          // 吉他灯 → 最终: 1.16
-    '吊燈指向light': 0.000001,    // 吊灯指向 → 最终: 0.11
-    '玄關light': 0.0000002,       // 玄关灯 → 最终: 0.0015
+    '吊燈light': 0.04,          // 吊灯 → 最终: 2.39
+    '檯燈light': 0.04,           // 台灯 → 最终: 0.52
+    '吉他light': 0.03,          // 吉他灯 → 最终: 1.16
+    '吊燈指向light': 0.00001,    // 吊灯指向 → 最终: 0.11
+    '玄關light': 0.007,       // 玄关灯 → 最终: 0.0015
     
     // 窗户灯光 - 降低到合理范围（避免过曝）
-    '窗plight': 0.08,            // 窗户1 → 最终: 7.42
-    '窗2plight': 0.08,           // 窗户2 → 最终: 7.28
-    '玄關補光Plight': 0.00001,     // 玄关补光 → 最终: 0.11
+    '窗plight': 0.008,            // 窗户1 → 最终: 7.42
+    '窗2plight': 0.008,           // 窗户2 → 最终: 7.28
+    '玄關補光Plight': 0.0001,     // 玄关补光 → 最终: 0.11
+    
+    // 交互物件 Spot 灯光 - 选中时高亮照明
+    'oldNoteLight': 0.5,        // 旧笔记 Spot 灯光
+    'newNoteLight': 0.5,        // 新笔记 Spot 灯光
+    'mokaPotLight': 0.5,        // 摩卡壶 Spot 灯光
+    'sinkLight': 0.5,           // 水槽 Spot 灯光
   },
   
   // 基础环境光
-  baseAmbientLight: 0.0001,
+  baseAmbientLight: 0.01,
   
   // 渲染器曝光度 - 平衡螢幕发光和整体亮度
-  toneMappingExposure: 0.001,
+  toneMappingExposure: 0.05,
   
   // 材质自发光系数
   emissiveMultiplier: 0.0001,

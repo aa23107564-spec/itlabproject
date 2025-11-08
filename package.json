@@ -27,9 +27,11 @@
   "dependencies": {
     "@react-three/drei": "^10.7.6",
     "@react-three/fiber": "^9.3.0",
+    "@react-three/postprocessing": "^3.0.4",
     "bootstrap": "^5.3.8",
     "express": "^4.21.2",
     "framer-motion": "^12.23.22",
+    "postprocessing": "^6.37.8",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-router-dom": "^7.9.1",

@@ -61,3 +61,13 @@ console.log('   - 慢速打字效果 (<slow>標籤)');
 console.log('   - 結局分支處理');
 console.log('   - 狀態管理和清理');
 
+
+
+
+
+
+
+
+
+
+

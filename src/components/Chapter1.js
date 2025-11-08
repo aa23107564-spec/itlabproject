@@ -17,17 +17,17 @@ function Chapter1() {
       
       {/* 章節一內容 - 3D 模型查看器 */}
       {!showIntro && (
-        <div style={{
-          width: '100vw',
-          height: '100vh',
+      <div style={{
+        width: '100vw',
+        height: '100vh',
           overflow: 'hidden',
           position: 'relative'
-        }}>
+      }}>
           <Chapter1ModelViewer />
-          
-          {/* Long Press Back to Login Component */}
-          <LongPressBackToLogin />
-        </div>
+        
+        {/* Long Press Back to Login Component */}
+        <LongPressBackToLogin />
+      </div>
       )}
     </>
   );
