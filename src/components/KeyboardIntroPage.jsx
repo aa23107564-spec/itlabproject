@@ -10,7 +10,14 @@ function KeyboardIntroPage({ onSkip, chapter = 3 }) {
 
   // 根據章節決定顯示的內容
   const getChapterContent = () => {
-    if (chapter === 2) {
+    if (chapter === 1) {
+      // 第一章
+      return {
+        left: "◀",
+        center: "選擇\n確認",
+        right: "▶"
+      };
+    } else if (chapter === 2) {
       return {
         left: "a",
         leftSub: "上一句",
@@ -55,7 +62,7 @@ function KeyboardIntroPage({ onSkip, chapter = 3 }) {
   }, [onSkip, isFadingOut]);
 
   return (
-    <div className="keyboard-intro-page">
+    <div className={`keyboard-intro-page chapter-${chapter}`}>
       {/* 內容區域 - 吸入效果 */}
       <div className={`keyboard-intro-content ${isFadingOut ? 'suck-in-content' : ''}`}>
         {/* 鍵盤圖標和對應文字 */}
@@ -68,20 +75,27 @@ function KeyboardIntroPage({ onSkip, chapter = 3 }) {
                 <span className="keyboard-text">{content.leftSub}</span>
               </>
             ) : (
+              // 第一章和第三章顯示箭頭
               <span className="keyboard-text keyboard-arrow">{content.left}</span>
             )}
           </div>
           
           {/* 中間文字 - 對應中間按鍵 */}
           <div className="keyboard-label keyboard-label-center">
-            {chapter === 3 ? (
+            {chapter === 1 ? (
+              <>
+                <span className="keyboard-text">選擇</span>
+                <span className="keyboard-text">確認</span>
+                <span className="keyboard-text">↳  同時長按以退出  ↲</span>
+              </>
+            ) : chapter === 3 ? (
               <>
                 <span className="keyboard-text">選字</span>
                 <span className="keyboard-text">確定</span>
                 <span className="keyboard-text">↳  同時長按以退出  ↲</span>
               </>
             ) : (
-              // 第一章和第二章
+              // 第二章
               <>
                 <span className="keyboard-text">↳  同時長按以退出  ↲</span>
               </>
@@ -96,6 +110,7 @@ function KeyboardIntroPage({ onSkip, chapter = 3 }) {
                 <span className="keyboard-text">{content.rightSub}</span>
               </>
             ) : (
+              // 第一章和第三章顯示箭頭
               <span className="keyboard-text keyboard-arrow">{content.right}</span>
             )}
           </div>

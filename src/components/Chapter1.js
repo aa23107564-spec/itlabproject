@@ -25,8 +25,15 @@ function Chapter1() {
       }}>
           <Chapter1ModelViewer />
         
-        {/* Long Press Back to Login Component */}
-        <LongPressBackToLogin />
+        {/* Long Press Back to Login Component - 使用第二章的白色样式 */}
+        <LongPressBackToLogin 
+          position="custom"
+          customPosition={{ right: '100px', top: '80px' }}
+          textColor="#ffffff"
+          progressColor="#ffffff"
+          progressBgColor="rgba(255, 255, 255, 0.3)"
+          scale={1.3}
+        />
       </div>
       )}
     </>

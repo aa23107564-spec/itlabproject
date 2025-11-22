@@ -14,6 +14,11 @@ function Chapter2() {
   const [hideParticles, setHideParticles] = useState(false); // 控制顆粒動畫隱藏
   const [currentDialogueClass, setCurrentDialogueClass] = useState(''); // 當前對話的 className
   const [startAnimation, setStartAnimation] = useState(false); // 控制開場動畫開始
+  const [showVideoFlicker, setShowVideoFlicker] = useState(false); // 控制視頻閃爍效果
+  const [videoFlickerState, setVideoFlickerState] = useState('black'); // 'video' 或 'black'
+  const [flickerCount, setFlickerCount] = useState(0); // 閃爍次數計數
+  const [videoLoaded, setVideoLoaded] = useState(false); // 視頻是否已加載
+  const videoRef = React.useRef(null); // 視頻元素引用
   // 使用三個圖片層來避免 src 切換導致的閃現
   const [imageOpacities, setImageOpacities] = useState({
     img22_1: 0, // 第一個 22.jpg，用於初始淡入和最終顯示
@@ -37,6 +42,8 @@ function Chapter2() {
       // 2秒後隱藏顆粒動畫（對話框淡出完成）
       setTimeout(() => {
         setHideParticles(true); // 隱藏顆粒動畫
+        // 對話框淡出後，開始視頻閃爍效果
+        setShowVideoFlicker(true);
       }, 2000);
     } else {
       console.log('其他分支結局，立即隱藏對話框後開始淡出，分支:', branchName);
@@ -91,6 +98,77 @@ function Chapter2() {
     }
   }, [showIntro]);
 
+  // 結局淡出後的視頻閃爍效果
+  useEffect(() => {
+    if (showEndingFadeOut && !isEndingBA) {
+      // 淡出動畫持續 3 秒，之後開始視頻閃爍效果
+      const startFlickerTimer = setTimeout(() => {
+        setShowVideoFlicker(true);
+      }, 3000);
+
+      return () => clearTimeout(startFlickerTimer);
+    }
+  }, [showEndingFadeOut, isEndingBA]);
+
+  // 視頻閃爍效果邏輯 - 不規律地切換視頻和黑屏
+  useEffect(() => {
+    if (!showVideoFlicker) return;
+    
+    // 播放完畢後，回到登入頁面
+    if (flickerCount >= 10) {
+      console.log('視頻閃爍效果結束，回到登入頁面');
+      setTimeout(() => {
+        window.location.href = '/itlabproject/';
+      }, 1000); // 最後停留 1 秒後返回
+      return;
+    }
+
+    // 生成不規律的持續時間（200ms - 1000ms）
+    const getRandomDuration = () => Math.random() * 800 + 200;
+    
+    const timer = setTimeout(() => {
+      setVideoFlickerState(prevState => {
+        const newState = prevState === 'black' ? 'video' : 'black';
+        setFlickerCount(count => count + 1);
+        return newState;
+      });
+    }, getRandomDuration());
+
+    return () => clearTimeout(timer);
+  }, [showVideoFlicker, videoFlickerState, flickerCount]);
+
+  // 當視頻閃爍效果開始時，嘗試播放視頻並從視頻開始
+  useEffect(() => {
+    if (showVideoFlicker && videoRef.current) {
+      console.log('視頻閃爍效果開始，嘗試播放視頻');
+      // 設置音量
+      videoRef.current.volume = 1.0;
+      videoRef.current.play().then(() => {
+        console.log('視頻播放成功，音量:', videoRef.current.volume);
+        setVideoLoaded(true);
+        // 從視頻開始，延遲一點再開始切換
+        setTimeout(() => {
+          setVideoFlickerState('video');
+        }, 100);
+      }).catch(err => {
+        console.error('視頻播放失敗:', err);
+      });
+    }
+  }, [showVideoFlicker]);
+
+  // 根據視頻/黑屏狀態控制音量 - 黑屏時靜音，視頻時恢復聲音
+  useEffect(() => {
+    if (videoRef.current && showVideoFlicker) {
+      if (videoFlickerState === 'black') {
+        videoRef.current.volume = 0;
+        console.log('切換到黑屏，靜音');
+      } else if (videoFlickerState === 'video') {
+        videoRef.current.volume = 1.0;
+        console.log('切換到視頻，恢復聲音');
+      }
+    }
+  }, [videoFlickerState, showVideoFlicker]);
+
   return (
     <>
       {/* 鍵盤引導頁面 */}
@@ -144,6 +222,71 @@ function Chapter2() {
         {/* 結局淡出覆蓋層 */}
         {showEndingFadeOut && (
           <div className={`ending-fade-out-overlay ${isEndingBA ? 'ending-b-a-fade' : ''}`}></div>
+        )}
+
+        {/* 視頻閃爍效果層 - 在淡出後顯示 */}
+        {showVideoFlicker && (
+          <div 
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              zIndex: 10000,
+              backgroundColor: 'black'
+            }}
+          >
+            {/* 視頻層 */}
+            <video 
+              ref={videoRef}
+              className="video-flicker-video"
+              loop
+              playsInline
+              preload="auto"
+              webkit-playsinline="true"
+              x5-playsinline="true"
+              onLoadedData={() => {
+                console.log('視頻數據已加載');
+                setVideoLoaded(true);
+              }}
+              onCanPlay={() => {
+                console.log('視頻可以播放');
+              }}
+              onError={(e) => {
+                console.error('視頻加載錯誤:', e);
+                console.error('視頻元素:', videoRef.current);
+              }}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                opacity: videoFlickerState === 'video' ? 1 : 0,
+                transition: 'opacity 0.3s ease-in-out'
+              }}
+            >
+              <source src={`${process.env.PUBLIC_URL}/images/content/第四章-1.mp4`} type="video/mp4" />
+              您的瀏覽器不支持視頻播放
+            </video>
+            {/* 黑屏層 - 通過 opacity 控制是否顯示 */}
+            <div 
+              className="video-flicker-black"
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                backgroundColor: 'black',
+                opacity: videoFlickerState === 'black' ? 1 : 0,
+                transition: 'opacity 0.3s ease-in-out',
+                pointerEvents: 'none'
+              }}
+            />
+          </div>
         )}
         
         {/* Long Press Back to Login Component - 第二章專用白色樣式（左下偏移、放大） */}

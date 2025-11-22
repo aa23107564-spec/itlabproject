@@ -1,9 +1,17 @@
-import React, { useEffect, useState, useRef, useCallback, useLayoutEffect } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useLayoutEffect, useMemo } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
 import { EffectComposer, Bloom } from '@react-three/postprocessing';
 import Chapter1LightConfig from './Chapter1LightConfig';
+import '../styles/visualNovel.css';
+
+const flashbackSegmentMap = {
+  sink: [2, 3, 4],
+  mokaPot: [1],
+  oldNote: [1],
+  newNote: []
+};
 
 // 相机控制组件 - 使用 useLayoutEffect 同步应用相机数据
 function CameraController({ cameraData, zoomFactor = 0.5, offsetX = 0, offsetY = 0, lookAtOffset = { x: 0, y: 0, z: 0 } }) {
@@ -51,7 +59,7 @@ function CameraController({ cameraData, zoomFactor = 0.5, offsetX = 0, offsetY =
 }
 
 // 场景旋转和缩放控制组件 - 根据选中物件旋转建模，处理放大动画
-function SceneRotationController({ groupRef, selectedObject, isZoomed, interactiveModel }) {
+function SceneRotationController({ groupRef, selectedObject, isZoomed, interactiveModel, pendingInstantZoomRef, initialUserZoomsRef }) {
   const rotationMapRef = useRef({
     mokaPot: 0,           // 默认视角，0度
     newNote: 70,          // 顺时针旋转 70 度
@@ -125,7 +133,7 @@ function SceneRotationController({ groupRef, selectedObject, isZoomed, interacti
     groupRef.current.rotation.y = newRotation;
     
     // 2. 放大/缩小动画 - 处理所有物件 ⭐
-    const scaleLerpFactor = 0.08;
+    const scaleLerpFactor = pendingInstantZoomRef.current ? 0.35 : 0.08;
     
     // 遍历所有已保存的父节点，确保所有非选中物件都回到原位 ⭐
     originalParentTransformsRef.current.forEach((original, objectName) => {
@@ -188,6 +196,13 @@ function SceneRotationController({ groupRef, selectedObject, isZoomed, interacti
         if (scaleProgress >= 0.98) {
           // 获取旋转中心偏移配置 ⭐
           const pivotOffset = rotationCenterOffsetRef.current[objectName] || { x: 0, y: 0, z: 0 };
+
+          if (pendingInstantZoomRef.current) {
+            pendingInstantZoomRef.current = false;
+            if (initialUserZoomsRef.current < 2) {
+              initialUserZoomsRef.current += 1;
+            }
+          }
           
           if (pivotOffset.x !== 0 || pivotOffset.y !== 0 || pivotOffset.z !== 0) {
             // 有偏移：围绕偏移的中心旋转 ⭐
@@ -310,19 +325,23 @@ function Light({ lightData, isZoomed }) {
         />
       );
     case 'SpotLight':
-      // SpotLight 需要使用 ref 来设置 target
+      // SpotLight 需要使用 ref 来设置 target，並確保 target 跟著父層一起旋轉
       const SpotLightWithTarget = () => {
         const spotRef = useRef();
+        const targetRef = useRef();
         
         useEffect(() => {
-          if (spotRef.current && lightData.target) {
-            // 设置 SpotLight 的目标位置
-            spotRef.current.target.position.copy(lightData.target);
-            spotRef.current.target.updateMatrixWorld();
+          if (spotRef.current && targetRef.current) {
+            spotRef.current.target = targetRef.current;
+            if (lightData.target) {
+              targetRef.current.position.copy(lightData.target);
+            }
+            targetRef.current.updateMatrixWorld(true);
           }
-        }, []);
+        }, [lightData.target]);
         
         return (
+          <>
           <spotLight
             ref={spotRef}
             name={lightData.name}
@@ -335,6 +354,9 @@ function Light({ lightData, isZoomed }) {
             decay={lightData.decay}
             castShadow={lightData.castShadow}
           />
+            {/* Target 物件掛在同一層級，確保跟隨父層變換 */}
+            <object3D ref={targetRef} />
+          </>
         );
       };
       return <SpotLightWithTarget />;
@@ -1003,7 +1025,7 @@ function InteractiveSpotLights({ spotLightsModel, selectedObject, isZoomed, inte
 }
 
 // 3D 模型组件
-function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLightsExtracted, onObjectsExtracted, selectedObject, isZoomed }) {
+function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLightsExtracted, onObjectsExtracted, selectedObject, isZoomed, pendingInstantZoomRef, initialUserZoomsRef }) {
   const rotationGroupRef = useRef(); // 用于包含所有需要旋转的元素
   const [lights, setLights] = useState([]);
   
@@ -1278,6 +1300,8 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
         selectedObject={selectedObject}
         isZoomed={isZoomed}
         interactiveModel={spotLightsModel}
+        pendingInstantZoomRef={pendingInstantZoomRef}
+        initialUserZoomsRef={initialUserZoomsRef}
       />
       
       {/* 交互物件管理 - 使用 Empty 物件 */}
@@ -1345,6 +1369,115 @@ function Chapter1ModelViewer() {
   const [hasError, setHasError] = useState(false);
   const [cameraData, setCameraData] = useState(null);
   const lightsCountRef = useRef(0); // 使用 ref 而不是 state 来避免无限循环
+  // 章节开场文字与显示控制
+  const introLinesRef = useRef([
+    '他蜷縮在檯燈的光暈中，鍵盤的敲擊聲如鼓點般零碎的刺破房間中的寂靜。',
+    '整個房間像是被遺棄的巢穴，米黃色的牆壁貼滿著雜亂的便利貼',
+    '各個字跡扭曲，是種不曾期望他人理解的隨意。',
+    '書桌旁的摩卡壺肆意尖叫，咖啡的氣味猶如燒焦的記憶，瘋狂撕裂人的理性。',
+    '對於咖啡杯而言，這是今晚的第五杯咖啡了，然而對他而言，這是星期一的第71個小時了。',
+    '眼睛瞪的發直並纏繞著朱紅色的血絲，在焦躁地啃咬下指甲無力的滲出鮮血。',
+    '我，作家，截稿如斷頭台，勒緊神經。',
+    '「我要救贖...! 你他媽的憑什麼...操，市場到底要什麼?」',
+    '開始看不清楚螢幕上的文字，一塊紅綠一塊黑的，方才清晰可見的章節現在變成血、墨扭曲而成的漩渦。',
+    '好不容易看清了文字，但完全無法理解，看來腦袋已經無法清晰對文字進行解碼。',
+    '一個英雄的故事，但卻在每一行都清楚的表示:',
+    '「黷龘靁鸞灪讜驫贇朸纔羼躚霻靇邐矙鱻黌贔鼗」',
+    '太好了，真是一個賺人熱淚的校園故事!!',
+    '無力的瞥向角落的電話，就在視線合上的一瞬',
+    '出版社的電話響起...',
+    '「怎麼不她媽去死! 沒錢談什麼藝術?」',
+    '轉瞬之間電話開始飛行並直直砸毀於牆壁。',
+    '「。。。。。。。。。。」',
+    '電話斷斷續續的撥接聲在毫無規則秩序的房間中來回遊蕩，規律的、還帶點雜音。'
+  ]);
+  const [introVisibleLines, setIntroVisibleLines] = useState([]);
+  const [isIntroDone, setIsIntroDone] = useState(false);
+  const [awaitingAnyKey, setAwaitingAnyKey] = useState(false);
+  const [canShowModel, setCanShowModel] = useState(false);
+  const [isSceneReady, setIsSceneReady] = useState(false);
+  const [isWarmupDone, setIsWarmupDone] = useState(false);
+  const [showIntroOverlay, setShowIntroOverlay] = useState(true); // 控制开场文字覆盖层显示
+  const [introOpacity, setIntroOpacity] = useState(1); // 控制开场文字的透明度
+  const [showVisualEffect, setShowVisualEffect] = useState(false); // 控制视觉效果（红色色块、文字扭曲）
+  const introScrollRef = useRef(null);
+  const typingLineIndexRef = useRef(0);
+  const typingCharIndexRef = useRef(0);
+  const typingActiveRef = useRef(false);
+  const typingTimeoutRef = useRef(null);
+  const awaitingAnyKeyRef = useRef(false);
+  const phoneRingAudioRef = useRef(null); // 电话铃声音频引用
+  const canShowModelRef = useRef(false); // 跟踪建模画面是否已显示
+  const isSceneReadyRef = useRef(false); // 跟踪场景是否加载完成
+  const isWarmupDoneRef = useRef(false); // 预热是否完成
+  
+  // 水槽文字内容（分段）
+  const sinkTexts = useRef([
+    '人類總是愛怪東怪西，總說要安靜才能專注，還為了讀書跑去咖啡廳。\n\n你雖可以說咖啡廳安靜，但你不會說咖啡廳比空無一人的家中還要安靜；\n\n人類是一個奇怪的生物，我們喜歡專注，因為專注會提高我們的行事效率。\n\n但此處我不是想討論這個。',
+    '你有沒有一種經驗?在寧靜的深夜，當你不斷的想要入睡\n\n但你始終會聽到那該死的鄰居不知道他家哪一個破東西一直製造出規律的聲響而導致你徹夜未眠。\n\n咚..咚..咚..咚..\n\n你好想知道到底是什麼鬼東西可以造出這種失眠製造裝置。\n\n可是奇怪了，我們可以在人流來往的咖啡廳中專注工作。\n\n那麼區區一個永不間段規律滴水交響曲怎麼會難倒你專注地睡眠呢?',
+    '大二的宿舍的夜晚，我本應該準備專注打稿，卻因為室友不斷按壓的筆聲、抖腳的頻率、身影輕微在餘光的晃動，不斷的分心，腦子亂。隨手敲出一段文字，干擾又從耳邊傳來...\n\n"',
+    '我一拳灌在室友肚子\n\n輕扶住他的頭，讓他的鼻軟骨與我的膝蓋親密接觸\n\n年輕真好，倒頭就睡，這下可以好好打稿了\n\n"',
+    '反應過來發現，稿子上無意識的填滿我的幻想。',
+    '啊啊，為什麼會說到這邊呢?真是奇怪...隨意的擺弄手中的咖啡杯，我好像又忘記了什麼。\n\n對了!\n\n寫寫寫寫寫寫寫，又想去哪裡了\n\n我的曠世巨作還滿懷欣喜的躺臥在從隔壁學校低價買回來的課桌椅上\n\n但我還是比較習慣稱他們為天才作家的書桌。\n\n「唉...我想也就這樣了吧」話落便站起身子，沒有任何緣由的環顧四周。\n\n……'
+  ]);
+  
+  // 水槽文字显示状态
+  const [sinkDisplayedText, setSinkDisplayedText] = useState('');
+  const [sinkCurrentSegment, setSinkCurrentSegment] = useState(0);
+  const [sinkIsTyping, setSinkIsTyping] = useState(false);
+  const sinkTypewriterTimerRef = useRef(null);
+  const sinkIsTypingRef = useRef(false); // 用于跟踪打字状态，避免闭包问题
+  const sinkCurrentSegmentRef = useRef(0); // 用于跟踪当前段，避免闭包问题
+  
+  // 摩卡壺文字内容（分段）
+  const mokaPotTexts = useRef([
+    '「你好，大家好，我是新來的，人類」\n\n「不知道各位會不會介意我待在這裡?」\n\n「啊，對了，忘了跟大家說，敝人有在寫一些隨感...散文?不是不是，沒有到那種程度」\n\n「但你說可以出散文集?哇，不敢當不敢當」\n\n有云不知誰云，不做無敗!意思是只要不做就沒有失敗。\n\n話說剛剛是在誰在說話?\n\n摩卡壺?別鬧了，你吃咖啡豆，乖\n\n話說這壺是誰送的，我沒怎麼印象?',
+    '其實我從來不知道要寫什麼。\n\n「哇!你在寫小說嗎?好厲害，讓我看看!」\n\n「剛來到業界先慢慢習慣吧，我們看好你。」\n\n「反應確實不錯啊，你真是上無人能及!」\n\n「說過多少遍了，你就只會寫這種東西嗎...?」\n\n「"恭喜，來自***的投稿獲得本次的金獎"網站如此刊登著。」\n\n「你有想要嘗試其他創作嗎?」\n\n我不懂，我每次都是一樣的，為什麼每次都不一樣。',
+    '阿，摩卡壺是編輯送的。\n\n上次新作開天窗，他的怒容......想到就顫抖。\n\n但突然想不起她的長相?算了，不記得、沒印象、算了。'
+  ]);
+  
+  // 摩卡壺文字显示状态
+  const [mokaPotDisplayedText, setMokaPotDisplayedText] = useState('');
+  const [mokaPotCurrentSegment, setMokaPotCurrentSegment] = useState(0);
+  const [mokaPotIsTyping, setMokaPotIsTyping] = useState(false);
+  const mokaPotTypewriterTimerRef = useRef(null);
+  const mokaPotIsTypingRef = useRef(false); // 用于跟踪打字状态，避免闭包问题
+  const mokaPotCurrentSegmentRef = useRef(0); // 用于跟踪当前段，避免闭包问题
+  
+  // 旧笔记本文字内容（分段）
+  const oldNoteTexts = useRef([
+    '筆記是這樣子的\n\n人們會一直持續換新的筆記本，不是因為寫完了，而是因為要記錄的東西結束了。\n\n但為了區隔開不同的事物，就算還有空間，我們也不會因此而勉強自己再寫下去\n\n沒錯\n\n因為已經結束了，即便還能寫下去，不同的內容不會寫在同一本筆記本裡\n\n更何況是不同人',
+    '大四那年，有個人說我懂人心。我們約會、散步，平凡得像是呼吸。\n\n「我們分手吧。」我的腦子裡只剩下劇情。\n\n「你連我的臉都記不清」分手?故事就這樣草草了結。\n\n我清楚地記得，確認關係的那天，手中的劇本寫到男女主角論及婚嫁，但怎麼也想不起來，\n\n我和她是怎麼認識的。'
+  ]);
+  
+  // 旧笔记本文字显示状态
+  const [oldNoteDisplayedText, setOldNoteDisplayedText] = useState('');
+  const [oldNoteCurrentSegment, setOldNoteCurrentSegment] = useState(0);
+  const [oldNoteIsTyping, setOldNoteIsTyping] = useState(false);
+  const oldNoteTypewriterTimerRef = useRef(null);
+  const oldNoteIsTypingRef = useRef(false); // 用于跟踪打字状态，避免闭包问题
+  const oldNoteCurrentSegmentRef = useRef(0); // 用于跟踪当前段，避免闭包问题
+  
+  // 新笔记本文字内容（分段）
+  const newNoteTexts = useRef([
+    '阿，是放到這邊了，我就有印象我這幾天寫了靈感上去。\n\n幾天前的我早就預料到我現在的靈感匱乏了吧!我真是我自己的救世主。',
+    '上頭有分別用不同字跡、不同顏色、不同規範，在同樣的位置寫滿了整個筆記。\n\n整個筆記，不分正面、背面，所有的空間被凌厲的內容填充得實實在在。\n\n彷彿作者根本就沒有意識到，這個筆記有其他內容存在。\n\n上面的混沌完全無法被理解，但可以確定有特定規律。',
+    '「幹!這是三小?」\n\n筆記瞬間脫手，文字符號的混亂誘導出純粹的生理恐懼\n\n「等等，我有印象...」\n\n拖動顫抖的手、再度撿起、打開外觀嶄新的筆記。\n\n方才看不清螢幕文字的雙眼，在左一塊綠右一塊紅的血、墨扭曲而成的漩渦中\n\n清晰的筆記內容展映在腦中\n\n「這是我?呵...呵..呵.呵呵呵呵呵」',
+    '壞掉的鈴聲從支離破碎的電話中響起。\n\n「快完成了」'
+  ]);
+  
+  // 新笔记本文字显示状态
+  const [newNoteDisplayedText, setNewNoteDisplayedText] = useState('');
+  const [newNoteCurrentSegment, setNewNoteCurrentSegment] = useState(0);
+  const [newNoteIsTyping, setNewNoteIsTyping] = useState(false);
+  const newNoteTypewriterTimerRef = useRef(null);
+  const newNoteIsTypingRef = useRef(false); // 用于跟踪打字状态，避免闭包问题
+  const newNoteCurrentSegmentRef = useRef(0); // 用于跟踪当前段，避免闭包问题
+
+  const latestSelectionRef = useRef({ name: 'mokaPot', index: 1 });
+  const hasPrewarmedZoomRef = useRef(false);
+  const pendingInstantZoomRef = useRef(false);
+  const initialUserZoomsRef = useRef(0);
   
   // 交互物件状态
   const [interactiveObjects, setInteractiveObjects] = useState([]);
@@ -1352,7 +1485,189 @@ function Chapter1ModelViewer() {
   const [selectedObjectName, setSelectedObjectName] = useState('mokaPot'); // 默认选中 mokaPot
   const [isZoomed, setIsZoomed] = useState(false); // 是否处于放大状态
   
-  // 5秒后隐藏提示信息
+  const currentSegmentIndex = useMemo(() => {
+    switch (selectedObjectName) {
+      case 'sink':
+        return sinkCurrentSegment;
+      case 'mokaPot':
+        return mokaPotCurrentSegment;
+      case 'oldNote':
+        return oldNoteCurrentSegment;
+      case 'newNote':
+        return newNoteCurrentSegment;
+      default:
+        return null;
+    }
+  }, [selectedObjectName, sinkCurrentSegment, mokaPotCurrentSegment, oldNoteCurrentSegment, newNoteCurrentSegment]);
+  
+  const isFlashbackActive = useMemo(() => {
+    if (!isZoomed || currentSegmentIndex === null || !selectedObjectName) return false;
+    const segments = flashbackSegmentMap[selectedObjectName] || [];
+    return segments.includes(currentSegmentIndex);
+  }, [isZoomed, selectedObjectName, currentSegmentIndex]);
+  
+  const infoBoxTheme = useMemo(() => ({
+    background: isFlashbackActive ? '#000000' : '#FFFFFF',
+    textColor: isFlashbackActive ? '#FFFFFF' : '#000000',
+    borderColor: isFlashbackActive ? '#FFFFFF' : '#000000'
+  }), [isFlashbackActive]);
+  
+  const [flashOverlayState, setFlashOverlayState] = useState('none'); // 'none' | 'enter' | 'active' | 'exit'
+  const flashOverlayTimerRef = useRef(null);
+  const prevFlashbackActiveRef = useRef(false);
+  const [isFlashbackComplete, setIsFlashbackComplete] = useState(true); // 闪回效果是否完成
+  const flashOverlayKeyRef = useRef(0); // 用于强制重新渲染
+  const [flashOverlayOpacity, setFlashOverlayOpacity] = useState(1); // 闪回覆盖层的透明度
+  const [flashbackVideoOpacity, setFlashbackVideoOpacity] = useState(0); // 闪回视频的透明度
+  const [whiteOverlayVisible, setWhiteOverlayVisible] = useState(false); // 全白覆盖层是否显示
+  const whiteOverlayKeyRef = useRef(0); // 用于强制重新渲染全白覆盖层
+  const flashbackVideoRef = useRef(null);
+  const flashbackVideoSrc = useMemo(() => `${process.env.PUBLIC_URL || ''}/images/backgrounds/270108_tiny.mp4`, []);
+  const pageFlipAudioRef = useRef(null); // 快速翻页声音效引用
+  
+  // 播放快速翻页声音效的辅助函数 - 立即播放，无延迟
+  const playPageFlipSound = useCallback(() => {
+    if (pageFlipAudioRef.current) {
+      // 立即重置并播放，不等待 promise
+      pageFlipAudioRef.current.currentTime = 0;
+      try {
+        const playPromise = pageFlipAudioRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(() => {});
+        }
+      } catch (e) {
+        // 忽略播放错误
+      }
+    }
+  }, []);
+
+  // 初始化快速翻页声音效，预加载以确保即时播放
+  useEffect(() => {
+    const audio = new Audio(`${process.env.PUBLIC_URL || ''}/audio/sfx/快速翻頁聲.mp3`);
+    audio.volume = 0.7;
+    audio.preload = 'auto';
+    // 提前加载音频
+    audio.load();
+    // 预播放以"解锁"音频（在用户第一次交互后）
+    audio.play().then(() => {
+      audio.pause();
+      audio.currentTime = 0;
+    }).catch(() => {
+      // 忽略初始播放错误（因为浏览器需要用户交互）
+    });
+    pageFlipAudioRef.current = audio;
+    return () => {
+      if (pageFlipAudioRef.current) {
+        pageFlipAudioRef.current.pause();
+        pageFlipAudioRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    const videoEl = flashbackVideoRef.current;
+    if (!videoEl) return;
+    if (flashOverlayState !== 'none') {
+      videoEl.currentTime = 0;
+      const playPromise = videoEl.play();
+      if (playPromise && typeof playPromise.catch === 'function') {
+        playPromise.catch(() => {});
+      }
+    } else {
+      videoEl.pause();
+      videoEl.currentTime = 0;
+    }
+  }, [flashOverlayState]);
+
+  const shouldShowTriangle = useMemo(() => {
+    if (!isZoomed || !selectedObjectName) return false;
+    switch (selectedObjectName) {
+      case 'sink':
+        return !sinkIsTyping && sinkCurrentSegment < sinkTexts.current.length - 1;
+      case 'mokaPot':
+        return !mokaPotIsTyping && mokaPotCurrentSegment < mokaPotTexts.current.length - 1;
+      case 'oldNote':
+        return !oldNoteIsTyping && oldNoteCurrentSegment < oldNoteTexts.current.length - 1;
+      case 'newNote':
+        return !newNoteIsTyping && newNoteCurrentSegment < newNoteTexts.current.length - 1;
+      default:
+        return false;
+    }
+  }, [
+    isZoomed,
+    selectedObjectName,
+    sinkIsTyping,
+    sinkCurrentSegment,
+    mokaPotIsTyping,
+    mokaPotCurrentSegment,
+    oldNoteIsTyping,
+    oldNoteCurrentSegment,
+    newNoteIsTyping,
+    newNoteCurrentSegment
+  ]);
+  
+  useEffect(() => {
+    if (isFlashbackActive && !prevFlashbackActiveRef.current) {
+      // 进入闪回：先显示全白覆盖层，然后淡出，同时播放视频
+      if (flashOverlayTimerRef.current) clearTimeout(flashOverlayTimerRef.current);
+      setIsFlashbackComplete(false); // 闪回开始，标记为未完成
+      flashOverlayKeyRef.current += 1; // 强制重新渲染以触发动画
+      whiteOverlayKeyRef.current += 1; // 强制重新渲染全白覆盖层
+      setWhiteOverlayVisible(true); // 显示全白覆盖层
+      setFlashOverlayState('enter');
+      flashOverlayTimerRef.current = setTimeout(() => {
+        setFlashOverlayState('active'); // 淡入完成后保持 active 状态（50%透明度）
+        setWhiteOverlayVisible(false); // 隐藏全白覆盖层
+        setIsFlashbackComplete(true); // 闪回完成，可以开始打字机动画
+        flashOverlayTimerRef.current = null;
+      }, 4000); // 淡入时间4秒（2秒淡出 + 2秒额外等待）
+    } else if (isFlashbackActive && prevFlashbackActiveRef.current) {
+      // 持续在闪回状态，保持 active
+      if (flashOverlayState !== 'active') {
+        setFlashOverlayState('active');
+        setFlashOverlayOpacity(0.5); // 保持50%透明度
+        setFlashbackVideoOpacity(1); // 视频保持完全不透明
+      }
+    } else if (!isFlashbackActive && prevFlashbackActiveRef.current) {
+      // 退出闪回：显示全白覆盖层，然后淡出
+      if (flashOverlayTimerRef.current) clearTimeout(flashOverlayTimerRef.current);
+      setIsFlashbackComplete(false); // 闪回退出开始，标记为未完成
+      flashOverlayKeyRef.current += 1; // 强制重新渲染
+      whiteOverlayKeyRef.current += 1; // 强制重新渲染全白覆盖层
+      setWhiteOverlayVisible(true); // 显示全白覆盖层
+      setFlashOverlayState('exit');
+      flashOverlayTimerRef.current = setTimeout(() => {
+        setFlashOverlayState('none');
+        setWhiteOverlayVisible(false); // 隐藏全白覆盖层
+        setIsFlashbackComplete(true); // 闪回退出完成
+        flashOverlayTimerRef.current = null;
+      }, 2000); // 淡出时间2秒
+    } else if (!isFlashbackActive && !prevFlashbackActiveRef.current) {
+      // 如果不在闪回状态，确保完成状态为 true
+      setIsFlashbackComplete(true);
+      if (flashOverlayState !== 'none') {
+        setFlashOverlayState('none');
+      }
+    }
+    prevFlashbackActiveRef.current = isFlashbackActive;
+  }, [isFlashbackActive, flashOverlayState]);
+  
+  useEffect(() => {
+    return () => {
+      if (flashOverlayTimerRef.current) {
+        clearTimeout(flashOverlayTimerRef.current);
+        flashOverlayTimerRef.current = null;
+      }
+    };
+  }, []);
+  
+  useEffect(() => {
+    if (!isSceneReady && cameraData && interactiveObjects.length > 0) {
+      setIsSceneReady(true);
+    }
+  }, [cameraData, interactiveObjects, isSceneReady]);
+
+  // 5秒后隐藏提示信息（保留，但不影响开场文字流程）
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowInfo(false);
@@ -1361,10 +1676,380 @@ function Chapter1ModelViewer() {
     return () => clearTimeout(timer);
   }, []);
   
+  // 开场文字：逐句逐字打字机动画，结束后提示按任意键继续；期间不显示建模
+  useEffect(() => {
+    const charDelayMs = 65;      // 每字延遲（放慢）
+    const lineDelayMs = 600;     // 每句之間延遲（放慢）
+    window.gameInteractionBlocked = true; // 阻止游戏交互
+    setIntroVisibleLines(['']);  // 準備第一行
+    setIsIntroDone(false);
+    setAwaitingAnyKey(false);
+    setShowIntroOverlay(true); // 显示开场文字覆盖层
+    setIntroOpacity(1); // 重置透明度
+    setShowVisualEffect(false); // 重置视觉效果
+    awaitingAnyKeyRef.current = false;
+    typingLineIndexRef.current = 0;
+    typingCharIndexRef.current = 0;
+    typingActiveRef.current = true;
+    
+    // 初始化电话铃声音频
+    phoneRingAudioRef.current = new Audio(`${process.env.PUBLIC_URL || ''}/audio/sfx/電話鈴聲.mp3`);
+    phoneRingAudioRef.current.loop = true; // 循环播放
+    phoneRingAudioRef.current.volume = 0.7; // 设置音量
+    
+    const tick = () => {
+      if (!typingActiveRef.current) return;
+      const lineIndex = typingLineIndexRef.current;
+      const charIndex = typingCharIndexRef.current;
+      const lines = introLinesRef.current;
+      if (lineIndex >= lines.length) {
+        typingActiveRef.current = false;
+        setIsIntroDone(true);
+        return;
+      }
+      
+      // 特殊处理：索引8（视觉效果句子）不显示文字，直接触发视觉效果
+      if (lineIndex === 8 && charIndex === 0) {
+        // 触发视觉效果
+        setShowVisualEffect(true);
+        // 视觉效果持续3秒后，继续下一句
+        setTimeout(() => {
+          setShowVisualEffect(false);
+          typingLineIndexRef.current = 9; // 跳到下一句（索引9）
+          typingCharIndexRef.current = 0;
+          setIntroVisibleLines(prev => [...prev, '']);
+          typingTimeoutRef.current = setTimeout(tick, charDelayMs);
+        }, 3000); // 视觉效果持续时间：3秒
+        return;
+      }
+      
+      const fullLine = lines[lineIndex];
+      const nextCharIndex = charIndex + 1;
+      if (nextCharIndex <= fullLine.length) {
+        setIntroVisibleLines(prev => {
+          const copy = [...prev];
+          copy[copy.length - 1] = fullLine.slice(0, nextCharIndex);
+          return copy;
+        });
+        typingCharIndexRef.current = nextCharIndex;
+        typingTimeoutRef.current = setTimeout(tick, charDelayMs);
+      } else {
+        // 本行完成
+        const nextLine = lineIndex + 1;
+        if (nextLine < lines.length) {
+          typingLineIndexRef.current = nextLine;
+          typingCharIndexRef.current = 0;
+          
+          // 特殊处理：第5句（索引4）完成后，停留5秒，然后淡出，清空所有文字，重新开始显示第6句（索引5）
+          if (lineIndex === 4 && nextLine === 5) {
+            // 停留5秒
+            setTimeout(() => {
+              // 触发淡出动画（opacity变为0）
+              setIntroOpacity(0);
+              // 等待淡出动画完成（约1秒）
+              setTimeout(() => {
+                // 清空所有显示的文字
+                setIntroVisibleLines(['']);
+                // 重置透明度为1
+                setIntroOpacity(1);
+                // 继续显示下一行
+                typingTimeoutRef.current = setTimeout(tick, charDelayMs);
+              }, 1000); // 淡出动画时间：1秒
+            }, 5000); // 停留时间：5秒
+          } 
+          // 特殊处理：第7句（索引7）完成后，立即触发视觉效果，停留5秒，然后淡出，清空所有文字，跳过索引8直接到索引9
+          else if (lineIndex === 7 && nextLine === 8) {
+            // 立即触发视觉效果（模糊和红色色块）
+            setShowVisualEffect(true);
+            // 停留5秒（在这5秒内，视觉效果持续显示）
+            setTimeout(() => {
+              // 关闭视觉效果
+              setShowVisualEffect(false);
+              // 触发淡出动画（opacity变为0）
+              setIntroOpacity(0);
+              // 等待淡出动画完成（约1秒）
+              setTimeout(() => {
+                // 清空所有显示的文字
+                setIntroVisibleLines(['']);
+                // 重置透明度为1
+                setIntroOpacity(1);
+                // 跳过索引8（视觉效果句子），直接跳到索引9
+                typingLineIndexRef.current = 9;
+                typingCharIndexRef.current = 0;
+                setIntroVisibleLines(['']);
+                typingTimeoutRef.current = setTimeout(tick, charDelayMs);
+              }, 1000); // 淡出动画时间：1秒
+            }, 5000); // 停留时间：5秒
+          } 
+          // 特殊处理：索引13（电话相关句子）完成后，播放电话铃声，停顿3秒，然后继续
+          else if (lineIndex === 13 && nextLine === 14) {
+            // 播放电话铃声
+            if (phoneRingAudioRef.current) {
+              phoneRingAudioRef.current.play().catch(err => {
+                console.warn('播放电话铃声失败:', err);
+              });
+            }
+            // 停顿3秒
+            setTimeout(() => {
+              setIntroVisibleLines(prev => [...prev, '']);
+              typingTimeoutRef.current = setTimeout(tick, charDelayMs);
+            }, 3000); // 停顿时间：3秒
+          } else {
+            // 正常情况：添加新行
+            setTimeout(() => {
+              setIntroVisibleLines(prev => [...prev, '']);
+              typingTimeoutRef.current = setTimeout(tick, charDelayMs);
+            }, lineDelayMs);
+          }
+        } else {
+          // 最后一行完成
+          typingActiveRef.current = false;
+          setIsIntroDone(true);
+        }
+      }
+    };
+    
+    const startTimer = setTimeout(tick, 300);
+    
+    // 开发模式：跳过打字机动画的快捷键（Ctrl+Shift+S）
+    const handleSkipAnimation = (e) => {
+      // 如果建模画面已显示，不再处理此事件
+      if (canShowModelRef.current) return;
+      // 只在开发环境启用（process.env.NODE_ENV === 'development'）
+      if (process.env.NODE_ENV === 'development' && e.ctrlKey && e.shiftKey && e.key === 'S') {
+        e.preventDefault();
+        // 停止打字机动画
+        typingActiveRef.current = false;
+        if (typingTimeoutRef.current) {
+          clearTimeout(typingTimeoutRef.current);
+        }
+        clearTimeout(startTimer);
+        
+        // 关闭视觉效果（如果有）
+        setShowVisualEffect(false);
+        
+        // 显示所有文字
+        const allLines = introLinesRef.current;
+        setIntroVisibleLines(allLines);
+        
+        // 播放电话铃声（因为跳过了所有动画，直接显示所有文字，所以应该播放）
+        if (phoneRingAudioRef.current) {
+          phoneRingAudioRef.current.play().catch(err => {
+            console.warn('播放电话铃声失败:', err);
+          });
+        }
+        
+        // 直接进入等待按任意键状态
+        setIsIntroDone(true);
+        
+        console.log('🚀 开发模式：已跳过打字机动画');
+      }
+    };
+    
+    const handleAnyKey = (e) => {
+      // 如果建模画面已显示，不再处理此事件，让事件继续传播
+      if (canShowModelRef.current) return;
+      if (!awaitingAnyKeyRef.current) return;
+      if (!isSceneReadyRef.current || !isWarmupDoneRef.current) return;
+      
+      e.preventDefault();
+      e.stopPropagation(); // 阻止事件继续传播
+      
+      // 先更新 ref，确保其他监听器能立即看到最新状态
+      awaitingAnyKeyRef.current = false;
+      canShowModelRef.current = true;
+      window.gameInteractionBlocked = false;
+      
+      // 然后更新状态
+      setAwaitingAnyKey(false);
+      setShowIntroOverlay(false); // 立即隐藏开场文字覆盖层
+      setCanShowModel(true); // 立即显示建模界面
+      
+      // 使用 setTimeout 确保在下一个事件循环中移除监听器，避免在事件处理过程中移除
+      setTimeout(() => {
+        window.removeEventListener('keydown', handleAnyKey);
+        window.removeEventListener('keydown', handleSkipAnimation);
+      }, 0);
+      
+      // 淡出电话铃声（在后台进行，不阻塞界面显示）
+      if (phoneRingAudioRef.current) {
+        const fadeOutDuration = 1000; // 淡出时间：1秒
+        const fadeOutInterval = 50; // 每50ms降低一次音量
+        const volumeStep = phoneRingAudioRef.current.volume / (fadeOutDuration / fadeOutInterval);
+        
+        const fadeOutTimer = setInterval(() => {
+          if (phoneRingAudioRef.current) {
+            phoneRingAudioRef.current.volume = Math.max(0, phoneRingAudioRef.current.volume - volumeStep);
+            if (phoneRingAudioRef.current.volume <= 0) {
+              clearInterval(fadeOutTimer);
+              phoneRingAudioRef.current.pause();
+              phoneRingAudioRef.current.currentTime = 0; // 重置播放位置
+              phoneRingAudioRef.current.volume = 0.7; // 恢复音量以便下次使用
+            }
+          }
+        }, fadeOutInterval);
+      }
+    };
+    window.addEventListener('keydown', handleAnyKey);
+    window.addEventListener('keydown', handleSkipAnimation);
+    
+    return () => {
+      typingActiveRef.current = false;
+      clearTimeout(startTimer);
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      window.removeEventListener('keydown', handleAnyKey);
+      window.removeEventListener('keydown', handleSkipAnimation);
+      // 停止并清理音频
+      if (phoneRingAudioRef.current) {
+        phoneRingAudioRef.current.pause();
+        phoneRingAudioRef.current.currentTime = 0;
+        phoneRingAudioRef.current = null;
+      }
+    };
+  }, []);
+  
+  // 新字出現時自動滾動至底部，避免超出螢幕
+  useEffect(() => {
+    if (introScrollRef.current) {
+      introScrollRef.current.scrollTop = introScrollRef.current.scrollHeight;
+    }
+  }, [introVisibleLines]);
+  
+  // 同步 canShowModel 状态到 ref
+  useEffect(() => {
+    canShowModelRef.current = canShowModel;
+  }, [canShowModel]);
+  
+  useEffect(() => {
+    isSceneReadyRef.current = isSceneReady;
+  }, [isSceneReady]);
+
+useEffect(() => {
+  isWarmupDoneRef.current = isWarmupDone;
+}, [isWarmupDone]);
+  
+  // 同步 awaitingAnyKey 状态到 ref
+  useEffect(() => {
+    awaitingAnyKeyRef.current = awaitingAnyKey;
+  }, [awaitingAnyKey]);
+
+  useEffect(() => {
+    latestSelectionRef.current = { name: selectedObjectName, index: selectedObjectIndex };
+  }, [selectedObjectName, selectedObjectIndex]);
+
+  useEffect(() => {
+    if (!isSceneReady || !showIntroOverlay || hasPrewarmedZoomRef.current || interactiveObjects.length === 0) return;
+    hasPrewarmedZoomRef.current = true;
+    setIsWarmupDone(false);
+    isWarmupDoneRef.current = false;
+
+    let cancelled = false;
+    const originalSelection = latestSelectionRef.current;
+    const warmList = interactiveObjects.map((obj, index) => ({ name: obj.name, index }));
+    let idx = 0;
+
+    const warmUpNext = () => {
+      if (cancelled) return;
+      if (idx >= warmList.length) {
+        setSelectedObjectName(originalSelection.name);
+        setSelectedObjectIndex(originalSelection.index);
+        setIsZoomed(false);
+        setIsWarmupDone(true);
+        isWarmupDoneRef.current = true;
+        return;
+      }
+      const target = warmList[idx];
+      setSelectedObjectIndex(target.index);
+      setSelectedObjectName(target.name);
+      setIsZoomed(true);
+      setTimeout(() => {
+        if (cancelled) return;
+        setIsZoomed(false);
+        idx += 1;
+        setTimeout(warmUpNext, 80);
+      }, 140);
+    };
+
+    const startTimer = setTimeout(warmUpNext, 120);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(startTimer);
+    };
+  }, [isSceneReady, showIntroOverlay, interactiveObjects]);
+
+  useEffect(() => {
+    if (!isSceneReady || !showIntroOverlay || hasPrewarmedZoomRef.current || interactiveObjects.length === 0) return;
+    hasPrewarmedZoomRef.current = true;
+    let cancelled = false;
+    const originalSelection = latestSelectionRef.current;
+    const warmList = interactiveObjects.map((obj, index) => ({ name: obj.name, index }));
+    let idx = 0;
+
+    const warmUpNext = () => {
+      if (cancelled) return;
+      if (idx >= warmList.length) {
+        setSelectedObjectName(originalSelection.name);
+        setSelectedObjectIndex(originalSelection.index);
+        setIsZoomed(false);
+        return;
+      }
+      const target = warmList[idx];
+      setSelectedObjectIndex(target.index);
+      setSelectedObjectName(target.name);
+      setIsZoomed(true);
+      setTimeout(() => {
+        if (cancelled) return;
+        setIsZoomed(false);
+        idx += 1;
+        setTimeout(warmUpNext, 80);
+      }, 140);
+    };
+
+    const startTimer = setTimeout(warmUpNext, 120);
+    return () => {
+      cancelled = true;
+      clearTimeout(startTimer);
+    };
+  }, [isSceneReady, showIntroOverlay, interactiveObjects]);
+
+  useEffect(() => {
+    latestSelectionRef.current = { name: selectedObjectName, index: selectedObjectIndex };
+  }, [selectedObjectName, selectedObjectIndex]);
+  
+  useEffect(() => {
+    if (!showIntroOverlay) return;
+    if (isIntroDone && isSceneReady && isWarmupDone && !awaitingAnyKeyRef.current) {
+      setAwaitingAnyKey(true);
+      awaitingAnyKeyRef.current = true;
+    }
+  }, [isIntroDone, isSceneReady, isWarmupDone, showIntroOverlay]);
+  
   // 键盘事件监听器 - 左右方向键切换物件，下方向键放大/缩小
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (interactiveObjects.length === 0) return;
+      // 只处理方向键
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight' && e.key !== 'ArrowDown') {
+        return;
+      }
+      
+      if (interactiveObjects.length === 0 || !isWarmupDoneRef.current) return;
+      if (!isSceneReady) return;
+      
+      // 开场未完成或仍在等待时，阻止场景交互
+      // 使用 ref 获取最新值，避免闭包问题
+      if (!canShowModelRef.current || awaitingAnyKeyRef.current) {
+        return;
+      }
+      
+      // 检查是否同时按下左右键（退出机制）
+      // 如果检测到组合键或游戏交互被阻止，则不执行游戏操作
+      if (window.gameInteractionBlocked || window.combinationDetected) {
+        return;
+      }
+      
+      // 阻止事件继续传播，确保其他监听器不会处理
+      e.stopPropagation();
       
       if (e.key === 'ArrowLeft') {
         e.preventDefault();
@@ -1388,19 +2073,690 @@ function Chapter1ModelViewer() {
         });
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
-        // 切换放大/缩小状态
+        // 如果水槽、摩卡壺、旧笔记本或新笔记本放大，处理文字分段
+        // 在调用 goNext 之前先检查是否需要播放音效（进入/退出回忆段）
+        if (isZoomed && selectedObjectName) {
+          let currentSegment = 0;
+          let nextSegment = 0;
+          const segments = flashbackSegmentMap[selectedObjectName] || [];
+          
+          // 获取当前段索引
+          if (selectedObjectName === 'sink') {
+            currentSegment = sinkCurrentSegmentRef.current;
+            nextSegment = currentSegment + 1;
+          } else if (selectedObjectName === 'mokaPot') {
+            currentSegment = mokaPotCurrentSegmentRef.current;
+            nextSegment = currentSegment + 1;
+          } else if (selectedObjectName === 'oldNote') {
+            currentSegment = oldNoteCurrentSegmentRef.current;
+            nextSegment = currentSegment + 1;
+          } else if (selectedObjectName === 'newNote') {
+            currentSegment = newNoteCurrentSegmentRef.current;
+            nextSegment = currentSegment + 1;
+          }
+          
+          const isCurrentSegmentFlashback = segments.includes(currentSegment);
+          const isNextSegmentFlashback = segments.includes(nextSegment);
+          
+          // 如果即将进入或退出回忆段，立即播放音效
+          if ((!isCurrentSegmentFlashback && isNextSegmentFlashback) || 
+              (isCurrentSegmentFlashback && !isNextSegmentFlashback)) {
+            playPageFlipSound();
+          }
+          // 如果当前是回忆段，且是最后一段（即将缩小建模），播放音效
+          else if (isCurrentSegmentFlashback) {
+            let totalSegments = 0;
+            if (selectedObjectName === 'sink') {
+              totalSegments = sinkTexts.current.length;
+            } else if (selectedObjectName === 'mokaPot') {
+              totalSegments = mokaPotTexts.current.length;
+            } else if (selectedObjectName === 'oldNote') {
+              totalSegments = oldNoteTexts.current.length;
+            } else if (selectedObjectName === 'newNote') {
+              totalSegments = newNoteTexts.current.length;
+            }
+            
+            if (nextSegment >= totalSegments) {
+              playPageFlipSound();
+            }
+          }
+        }
+        
+        if (isZoomed && selectedObjectName === 'sink') {
+          goNextSinkSegment();
+        } else if (isZoomed && selectedObjectName === 'mokaPot') {
+          goNextMokaPotSegment();
+        } else if (isZoomed && selectedObjectName === 'oldNote') {
+          goNextOldNoteSegment();
+        } else if (isZoomed && selectedObjectName === 'newNote') {
+          goNextNewNoteSegment();
+        } else {
+          // 其他情况切换放大/缩小状态
         setIsZoomed((prev) => {
           const newState = !prev;
+            if (newState && isWarmupDoneRef.current && initialUserZoomsRef.current < 2) {
+              pendingInstantZoomRef.current = true;
+            } else if (!newState) {
+              pendingInstantZoomRef.current = false;
+            }
           return newState;
         });
+        }
       }
     };
     
-    window.addEventListener('keydown', handleKeyDown);
+    // 使用捕获阶段，确保此监听器在其他监听器之前执行
+    window.addEventListener('keydown', handleKeyDown, true);
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keydown', handleKeyDown, true);
     };
-  }, [interactiveObjects, selectedObjectName]);
+  }, [interactiveObjects, selectedObjectName, isZoomed, goNextSinkSegment, goNextMokaPotSegment, goNextOldNoteSegment, goNextNewNoteSegment, isSceneReady, playPageFlipSound]);
+  
+  // 水槽打字机动画
+  const startSinkTypewriter = useCallback((text) => {
+    setSinkDisplayedText('');
+    setSinkIsTyping(true);
+    sinkIsTypingRef.current = true; // 同步更新 ref
+    
+    let charIndex = 0;
+    const textLength = text.length;
+    
+    const type = () => {
+      if (charIndex < textLength) {
+        setSinkDisplayedText(text.substring(0, charIndex + 1));
+        charIndex++;
+        
+        // 标点符号停顿400ms，普通字符40ms
+        const punctuationMarks = ['，', '。', '！', '？', '；', '：', '、', '…', '─', '—', '～', '‧'];
+        const currentChar = text[charIndex - 1];
+        const delay = punctuationMarks.includes(currentChar) ? 400 : 40;
+        
+        sinkTypewriterTimerRef.current = setTimeout(type, delay);
+      } else {
+        setSinkDisplayedText(text);
+        setSinkIsTyping(false);
+        sinkIsTypingRef.current = false; // 同步更新 ref
+      }
+    };
+    
+    type();
+  }, []);
+  
+  // 停止水槽打字机动画
+  const skipSinkTypewriter = useCallback(() => {
+    if (sinkTypewriterTimerRef.current) {
+      clearTimeout(sinkTypewriterTimerRef.current);
+      sinkTypewriterTimerRef.current = null;
+    }
+    if (sinkCurrentSegment < sinkTexts.current.length) {
+      setSinkDisplayedText(sinkTexts.current[sinkCurrentSegment]);
+      setSinkIsTyping(false);
+      sinkIsTypingRef.current = false; // 同步更新 ref
+    }
+  }, [sinkCurrentSegment]);
+  
+  // 水槽文字下一段
+  const goNextSinkSegment = useCallback(() => {
+    // 如果正在打字，不允许继续，必须等文字全部显示完（使用 ref 获取最新值）
+    if (sinkIsTypingRef.current) {
+      return;
+    }
+    
+    // 检查是否还有下一段（使用 ref 获取最新值，避免闭包问题）
+    const currentSegment = sinkCurrentSegmentRef.current;
+    const nextSegment = currentSegment + 1;
+    const segments = flashbackSegmentMap['sink'] || [];
+    const isCurrentSegmentFlashback = segments.includes(currentSegment);
+    const isNextSegmentFlashback = segments.includes(nextSegment);
+    
+    // 如果当前是回忆段，下一段不是回忆段（退出回忆），播放音效
+    if (isCurrentSegmentFlashback && !isNextSegmentFlashback && nextSegment < sinkTexts.current.length) {
+      playPageFlipSound();
+    }
+    // 如果当前不是回忆段，下一段是回忆段（进入回忆），播放音效
+    if (!isCurrentSegmentFlashback && isNextSegmentFlashback) {
+      playPageFlipSound();
+    }
+    
+    if (nextSegment < sinkTexts.current.length) {
+      // 清除当前文字
+      setSinkDisplayedText('');
+      // 移动到下一段
+      setSinkCurrentSegment(prev => {
+        const next = prev + 1;
+        sinkCurrentSegmentRef.current = next; // 同步更新 ref
+        return next;
+      });
+    } else {
+      // 所有段落显示完毕，缩小建模归位
+      // 如果当前是回忆段，退出时播放音效
+      if (isCurrentSegmentFlashback) {
+        playPageFlipSound();
+      }
+      // 先停止打字机定时器
+      if (sinkTypewriterTimerRef.current) {
+        clearTimeout(sinkTypewriterTimerRef.current);
+        sinkTypewriterTimerRef.current = null;
+      }
+      // 直接缩小建模，让资讯框立即隐藏
+      setIsZoomed(false);
+    }
+  }, [playPageFlipSound]);
+  const startMokaPotTypewriter = useCallback((text) => {
+    setMokaPotDisplayedText('');
+    setMokaPotIsTyping(true);
+    mokaPotIsTypingRef.current = true; // 同步更新 ref
+    
+    let charIndex = 0;
+    const textLength = text.length;
+    
+    const type = () => {
+      if (charIndex < textLength) {
+        setMokaPotDisplayedText(text.substring(0, charIndex + 1));
+        charIndex++;
+        
+        // 标点符号停顿400ms，普通字符40ms
+        const punctuationMarks = ['，', '。', '！', '？', '；', '：', '、', '…', '─', '—', '～', '‧'];
+        const currentChar = text[charIndex - 1];
+        const delay = punctuationMarks.includes(currentChar) ? 400 : 40;
+        
+        mokaPotTypewriterTimerRef.current = setTimeout(type, delay);
+      } else {
+        setMokaPotDisplayedText(text);
+        setMokaPotIsTyping(false);
+        mokaPotIsTypingRef.current = false; // 同步更新 ref
+      }
+    };
+    
+    type();
+  }, []);
+  
+  // 停止摩卡壺打字机动画
+  const skipMokaPotTypewriter = useCallback(() => {
+    if (mokaPotTypewriterTimerRef.current) {
+      clearTimeout(mokaPotTypewriterTimerRef.current);
+      mokaPotTypewriterTimerRef.current = null;
+    }
+    if (mokaPotCurrentSegment < mokaPotTexts.current.length) {
+      setMokaPotDisplayedText(mokaPotTexts.current[mokaPotCurrentSegment]);
+      setMokaPotIsTyping(false);
+      mokaPotIsTypingRef.current = false; // 同步更新 ref
+    }
+  }, [mokaPotCurrentSegment]);
+  
+  // 摩卡壺文字下一段
+  const goNextMokaPotSegment = useCallback(() => {
+    // 如果正在打字，不允许继续，必须等文字全部显示完（使用 ref 获取最新值）
+    if (mokaPotIsTypingRef.current) {
+      return;
+    }
+    
+    // 检查是否还有下一段（使用 ref 获取最新值，避免闭包问题）
+    const currentSegment = mokaPotCurrentSegmentRef.current;
+    const nextSegment = currentSegment + 1;
+    const segments = flashbackSegmentMap['mokaPot'] || [];
+    const isCurrentSegmentFlashback = segments.includes(currentSegment);
+    const isNextSegmentFlashback = segments.includes(nextSegment);
+    
+    // 如果当前是回忆段，下一段不是回忆段（退出回忆），播放音效
+    if (isCurrentSegmentFlashback && !isNextSegmentFlashback && nextSegment < mokaPotTexts.current.length) {
+      playPageFlipSound();
+    }
+    // 如果当前不是回忆段，下一段是回忆段（进入回忆），播放音效
+    if (!isCurrentSegmentFlashback && isNextSegmentFlashback) {
+      playPageFlipSound();
+    }
+    
+    if (nextSegment < mokaPotTexts.current.length) {
+      // 清除当前文字
+      setMokaPotDisplayedText('');
+      // 移动到下一段
+      setMokaPotCurrentSegment(prev => {
+        const next = prev + 1;
+        mokaPotCurrentSegmentRef.current = next; // 同步更新 ref
+        return next;
+      });
+    } else {
+      // 所有段落显示完毕，缩小建模归位
+      // 如果当前是回忆段，退出时播放音效
+      if (isCurrentSegmentFlashback) {
+        playPageFlipSound();
+      }
+      // 先停止打字机定时器
+      if (mokaPotTypewriterTimerRef.current) {
+        clearTimeout(mokaPotTypewriterTimerRef.current);
+        mokaPotTypewriterTimerRef.current = null;
+      }
+      // 直接缩小建模，让资讯框立即隐藏
+      setIsZoomed(false);
+    }
+  }, [playPageFlipSound]);
+  
+  // 旧笔记本打字机动画
+  const startOldNoteTypewriter = useCallback((text) => {
+    setOldNoteDisplayedText('');
+    setOldNoteIsTyping(true);
+    oldNoteIsTypingRef.current = true; // 同步更新 ref
+    
+    let charIndex = 0;
+    const textLength = text.length;
+    
+    const type = () => {
+      if (charIndex < textLength) {
+        setOldNoteDisplayedText(text.substring(0, charIndex + 1));
+        charIndex++;
+        
+        // 标点符号停顿400ms，普通字符40ms
+        const punctuationMarks = ['，', '。', '！', '？', '；', '：', '、', '…', '─', '—', '～', '‧'];
+        const currentChar = text[charIndex - 1];
+        const delay = punctuationMarks.includes(currentChar) ? 400 : 40;
+        
+        oldNoteTypewriterTimerRef.current = setTimeout(type, delay);
+      } else {
+        setOldNoteDisplayedText(text);
+        setOldNoteIsTyping(false);
+        oldNoteIsTypingRef.current = false; // 同步更新 ref
+      }
+    };
+    
+    type();
+  }, []);
+  
+  // 停止旧笔记本打字机动画
+  const skipOldNoteTypewriter = useCallback(() => {
+    if (oldNoteTypewriterTimerRef.current) {
+      clearTimeout(oldNoteTypewriterTimerRef.current);
+      oldNoteTypewriterTimerRef.current = null;
+    }
+    if (oldNoteCurrentSegment < oldNoteTexts.current.length) {
+      setOldNoteDisplayedText(oldNoteTexts.current[oldNoteCurrentSegment]);
+      setOldNoteIsTyping(false);
+      oldNoteIsTypingRef.current = false; // 同步更新 ref
+    }
+  }, [oldNoteCurrentSegment]);
+  
+  // 旧笔记本文字下一段
+  const goNextOldNoteSegment = useCallback(() => {
+    // 如果正在打字，不允许继续，必须等文字全部显示完（使用 ref 获取最新值）
+    if (oldNoteIsTypingRef.current) {
+      return;
+    }
+    
+    // 检查是否还有下一段（使用 ref 获取最新值，避免闭包问题）
+    const currentSegment = oldNoteCurrentSegmentRef.current;
+    const nextSegment = currentSegment + 1;
+    const segments = flashbackSegmentMap['oldNote'] || [];
+    const isCurrentSegmentFlashback = segments.includes(currentSegment);
+    const isNextSegmentFlashback = segments.includes(nextSegment);
+    
+    // 如果当前是回忆段，下一段不是回忆段（退出回忆），播放音效
+    if (isCurrentSegmentFlashback && !isNextSegmentFlashback && nextSegment < oldNoteTexts.current.length) {
+      playPageFlipSound();
+    }
+    // 如果当前不是回忆段，下一段是回忆段（进入回忆），播放音效
+    if (!isCurrentSegmentFlashback && isNextSegmentFlashback) {
+      playPageFlipSound();
+    }
+    
+    if (nextSegment < oldNoteTexts.current.length) {
+      // 清除当前文字
+      setOldNoteDisplayedText('');
+      // 移动到下一段
+      setOldNoteCurrentSegment(prev => {
+        const next = prev + 1;
+        oldNoteCurrentSegmentRef.current = next; // 同步更新 ref
+        return next;
+      });
+    } else {
+      // 所有段落显示完毕，缩小建模归位
+      // 如果当前是回忆段，退出时播放音效
+      if (isCurrentSegmentFlashback) {
+        playPageFlipSound();
+      }
+      // 先停止打字机定时器
+      if (oldNoteTypewriterTimerRef.current) {
+        clearTimeout(oldNoteTypewriterTimerRef.current);
+        oldNoteTypewriterTimerRef.current = null;
+      }
+      // 直接缩小建模，让资讯框立即隐藏
+      setIsZoomed(false);
+    }
+  }, [playPageFlipSound]);
+  
+  // 新笔记本打字机动画
+  const startNewNoteTypewriter = useCallback((text) => {
+    setNewNoteDisplayedText('');
+    setNewNoteIsTyping(true);
+    newNoteIsTypingRef.current = true; // 同步更新 ref
+    
+    let charIndex = 0;
+    const textLength = text.length;
+    
+    const type = () => {
+      if (charIndex < textLength) {
+        setNewNoteDisplayedText(text.substring(0, charIndex + 1));
+        charIndex++;
+        
+        // 标点符号停顿400ms，普通字符40ms
+        const punctuationMarks = ['，', '。', '！', '？', '；', '：', '、', '…', '─', '—', '～', '‧'];
+        const currentChar = text[charIndex - 1];
+        const delay = punctuationMarks.includes(currentChar) ? 400 : 40;
+        
+        newNoteTypewriterTimerRef.current = setTimeout(type, delay);
+      } else {
+        setNewNoteDisplayedText(text);
+        setNewNoteIsTyping(false);
+        newNoteIsTypingRef.current = false; // 同步更新 ref
+      }
+    };
+    
+    type();
+  }, []);
+  
+  // 停止新笔记本打字机动画
+  const skipNewNoteTypewriter = useCallback(() => {
+    if (newNoteTypewriterTimerRef.current) {
+      clearTimeout(newNoteTypewriterTimerRef.current);
+      newNoteTypewriterTimerRef.current = null;
+    }
+    if (newNoteCurrentSegment < newNoteTexts.current.length) {
+      setNewNoteDisplayedText(newNoteTexts.current[newNoteCurrentSegment]);
+      setNewNoteIsTyping(false);
+      newNoteIsTypingRef.current = false; // 同步更新 ref
+    }
+  }, [newNoteCurrentSegment]);
+  
+  // 新笔记本文字下一段
+  const goNextNewNoteSegment = useCallback(() => {
+    // 如果正在打字，不允许继续，必须等文字全部显示完（使用 ref 获取最新值）
+    if (newNoteIsTypingRef.current) {
+      return;
+    }
+    
+    // 检查是否还有下一段（使用 ref 获取最新值，避免闭包问题）
+    const currentSegment = newNoteCurrentSegmentRef.current;
+    const nextSegment = currentSegment + 1;
+    const segments = flashbackSegmentMap['newNote'] || [];
+    const isCurrentSegmentFlashback = segments.includes(currentSegment);
+    const isNextSegmentFlashback = segments.includes(nextSegment);
+    
+    // 如果当前是回忆段，下一段不是回忆段（退出回忆），播放音效
+    if (isCurrentSegmentFlashback && !isNextSegmentFlashback && nextSegment < newNoteTexts.current.length) {
+      playPageFlipSound();
+    }
+    // 如果当前不是回忆段，下一段是回忆段（进入回忆），播放音效
+    if (!isCurrentSegmentFlashback && isNextSegmentFlashback) {
+      playPageFlipSound();
+    }
+    
+    if (nextSegment < newNoteTexts.current.length) {
+      // 清除当前文字
+      setNewNoteDisplayedText('');
+      // 移动到下一段
+      setNewNoteCurrentSegment(prev => {
+        const next = prev + 1;
+        newNoteCurrentSegmentRef.current = next; // 同步更新 ref
+        return next;
+      });
+    } else {
+      // 所有段落显示完毕，缩小建模归位
+      // 如果当前是回忆段，退出时播放音效
+      if (isCurrentSegmentFlashback) {
+        playPageFlipSound();
+      }
+      // 先停止打字机定时器
+      if (newNoteTypewriterTimerRef.current) {
+        clearTimeout(newNoteTypewriterTimerRef.current);
+        newNoteTypewriterTimerRef.current = null;
+      }
+      // 直接缩小建模，让资讯框立即隐藏
+      setIsZoomed(false);
+    }
+  }, []);
+  
+  // 当水槽被放大时，初始化打字机动画
+  useEffect(() => {
+    if (isZoomed && selectedObjectName === 'sink') {
+      // 重置到第一段
+      setSinkCurrentSegment(0);
+      sinkCurrentSegmentRef.current = 0; // 同步更新 ref
+      setSinkDisplayedText('');
+      setSinkIsTyping(false);
+      sinkIsTypingRef.current = false; // 同步更新 ref
+      if (sinkTypewriterTimerRef.current) {
+        clearTimeout(sinkTypewriterTimerRef.current);
+        sinkTypewriterTimerRef.current = null;
+      }
+    } else {
+      // 当水槽缩小或切换物件时，清理状态
+      if (sinkTypewriterTimerRef.current) {
+        clearTimeout(sinkTypewriterTimerRef.current);
+        sinkTypewriterTimerRef.current = null;
+      }
+      setSinkDisplayedText('');
+      setSinkCurrentSegment(0);
+      sinkCurrentSegmentRef.current = 0; // 同步更新 ref
+      setSinkIsTyping(false);
+      sinkIsTypingRef.current = false; // 同步更新 ref
+    }
+  }, [isZoomed, selectedObjectName]);
+  
+  // 当水槽当前段改变时，开始新的打字机动画
+  useEffect(() => {
+    if (isZoomed && selectedObjectName === 'sink' && sinkCurrentSegment < sinkTexts.current.length && sinkCurrentSegment >= 0) {
+      if (sinkTypewriterTimerRef.current) {
+        clearTimeout(sinkTypewriterTimerRef.current);
+        sinkTypewriterTimerRef.current = null;
+      }
+      
+      // 检查当前段和前一段是否是闪回段
+      const segments = flashbackSegmentMap['sink'] || [];
+      const isCurrentSegmentFlashback = segments.includes(sinkCurrentSegment);
+      const isPrevSegmentFlashback = sinkCurrentSegment > 0 && segments.includes(sinkCurrentSegment - 1);
+      
+      // 如果是闪回段，立即清空文字，等待闪回效果完成后再开始打字机动画
+      if (isCurrentSegmentFlashback) {
+        setSinkDisplayedText('');
+        setSinkIsTyping(false);
+        sinkIsTypingRef.current = false;
+      }
+      
+      // 如果当前段是闪回段，但前一段也是闪回段，说明是在闪回段落内部切换，不需要等待
+      // 只有在进入闪回（前一段不是闪回，当前段是闪回）时才需要等待
+      const delay = (isCurrentSegmentFlashback && !isPrevSegmentFlashback) ? 4050 : 50; // 进入闪回效果4秒 + 50ms缓冲
+      
+      const timer = setTimeout(() => {
+        startSinkTypewriter(sinkTexts.current[sinkCurrentSegment]);
+      }, delay);
+      return () => clearTimeout(timer);
+    }
+  }, [sinkCurrentSegment, isZoomed, selectedObjectName, startSinkTypewriter]);
+  
+  // 当摩卡壺被放大时，初始化打字机动画
+  useEffect(() => {
+    if (isZoomed && selectedObjectName === 'mokaPot') {
+      // 重置到第一段
+      setMokaPotCurrentSegment(0);
+      mokaPotCurrentSegmentRef.current = 0; // 同步更新 ref
+      setMokaPotDisplayedText('');
+      setMokaPotIsTyping(false);
+      mokaPotIsTypingRef.current = false; // 同步更新 ref
+      if (mokaPotTypewriterTimerRef.current) {
+        clearTimeout(mokaPotTypewriterTimerRef.current);
+        mokaPotTypewriterTimerRef.current = null;
+      }
+    } else {
+      // 当摩卡壺缩小或切换物件时，清理状态
+      if (mokaPotTypewriterTimerRef.current) {
+        clearTimeout(mokaPotTypewriterTimerRef.current);
+        mokaPotTypewriterTimerRef.current = null;
+      }
+      setMokaPotDisplayedText('');
+      setMokaPotCurrentSegment(0);
+      mokaPotCurrentSegmentRef.current = 0; // 同步更新 ref
+      setMokaPotIsTyping(false);
+      mokaPotIsTypingRef.current = false; // 同步更新 ref
+    }
+  }, [isZoomed, selectedObjectName]);
+  
+  // 当摩卡壺当前段改变时，开始新的打字机动画
+  useEffect(() => {
+    if (isZoomed && selectedObjectName === 'mokaPot' && mokaPotCurrentSegment < mokaPotTexts.current.length && mokaPotCurrentSegment >= 0) {
+      if (mokaPotTypewriterTimerRef.current) {
+        clearTimeout(mokaPotTypewriterTimerRef.current);
+        mokaPotTypewriterTimerRef.current = null;
+      }
+      
+      // 检查当前段是否是闪回段
+      const segments = flashbackSegmentMap['mokaPot'] || [];
+      const isCurrentSegmentFlashback = segments.includes(mokaPotCurrentSegment);
+      
+      // 如果是闪回段，立即清空文字，等待闪回效果完成后再开始打字机动画
+      if (isCurrentSegmentFlashback) {
+        setMokaPotDisplayedText('');
+        setMokaPotIsTyping(false);
+        mokaPotIsTypingRef.current = false;
+      }
+      
+      // 如果是闪回段，等待闪回效果完成（4秒淡入+等待）；否则正常延迟
+      const delay = isCurrentSegmentFlashback ? 4050 : 50; // 闪回效果4秒 + 50ms缓冲
+      
+      const timer = setTimeout(() => {
+        startMokaPotTypewriter(mokaPotTexts.current[mokaPotCurrentSegment]);
+      }, delay);
+      return () => clearTimeout(timer);
+    }
+  }, [mokaPotCurrentSegment, isZoomed, selectedObjectName, startMokaPotTypewriter]);
+  
+  // 当旧笔记本被放大时，初始化打字机动画
+  useEffect(() => {
+    if (isZoomed && selectedObjectName === 'oldNote') {
+      // 重置到第一段
+      setOldNoteCurrentSegment(0);
+      oldNoteCurrentSegmentRef.current = 0; // 同步更新 ref
+      setOldNoteDisplayedText('');
+      setOldNoteIsTyping(false);
+      oldNoteIsTypingRef.current = false; // 同步更新 ref
+      if (oldNoteTypewriterTimerRef.current) {
+        clearTimeout(oldNoteTypewriterTimerRef.current);
+        oldNoteTypewriterTimerRef.current = null;
+      }
+    } else {
+      // 当旧笔记本缩小或切换物件时，清理状态
+      if (oldNoteTypewriterTimerRef.current) {
+        clearTimeout(oldNoteTypewriterTimerRef.current);
+        oldNoteTypewriterTimerRef.current = null;
+      }
+      setOldNoteDisplayedText('');
+      setOldNoteCurrentSegment(0);
+      oldNoteCurrentSegmentRef.current = 0; // 同步更新 ref
+      setOldNoteIsTyping(false);
+      oldNoteIsTypingRef.current = false; // 同步更新 ref
+    }
+  }, [isZoomed, selectedObjectName]);
+  
+  // 当旧笔记本当前段改变时，开始新的打字机动画
+  useEffect(() => {
+    if (isZoomed && selectedObjectName === 'oldNote' && oldNoteCurrentSegment < oldNoteTexts.current.length && oldNoteCurrentSegment >= 0) {
+      if (oldNoteTypewriterTimerRef.current) {
+        clearTimeout(oldNoteTypewriterTimerRef.current);
+        oldNoteTypewriterTimerRef.current = null;
+      }
+      
+      // 检查当前段是否是闪回段
+      const segments = flashbackSegmentMap['oldNote'] || [];
+      const isCurrentSegmentFlashback = segments.includes(oldNoteCurrentSegment);
+      
+      // 如果是闪回段，立即清空文字，等待闪回效果完成后再开始打字机动画
+      if (isCurrentSegmentFlashback) {
+        setOldNoteDisplayedText('');
+        setOldNoteIsTyping(false);
+        oldNoteIsTypingRef.current = false;
+      }
+      
+      // 如果是闪回段，等待闪回效果完成（4秒淡入+等待）；否则正常延迟
+      const delay = isCurrentSegmentFlashback ? 4050 : 50; // 闪回效果4秒 + 50ms缓冲
+      
+      const timer = setTimeout(() => {
+        startOldNoteTypewriter(oldNoteTexts.current[oldNoteCurrentSegment]);
+      }, delay);
+      return () => clearTimeout(timer);
+    }
+  }, [oldNoteCurrentSegment, isZoomed, selectedObjectName, startOldNoteTypewriter]);
+  
+  // 当新笔记本被放大时，初始化打字机动画
+  useEffect(() => {
+    if (isZoomed && selectedObjectName === 'newNote') {
+      // 重置到第一段
+      setNewNoteCurrentSegment(0);
+      newNoteCurrentSegmentRef.current = 0; // 同步更新 ref
+      setNewNoteDisplayedText('');
+      setNewNoteIsTyping(false);
+      newNoteIsTypingRef.current = false; // 同步更新 ref
+      if (newNoteTypewriterTimerRef.current) {
+        clearTimeout(newNoteTypewriterTimerRef.current);
+        newNoteTypewriterTimerRef.current = null;
+      }
+    } else {
+      // 当新笔记本缩小或切换物件时，清理状态
+      if (newNoteTypewriterTimerRef.current) {
+        clearTimeout(newNoteTypewriterTimerRef.current);
+        newNoteTypewriterTimerRef.current = null;
+      }
+      setNewNoteDisplayedText('');
+      setNewNoteCurrentSegment(0);
+      newNoteCurrentSegmentRef.current = 0; // 同步更新 ref
+      setNewNoteIsTyping(false);
+      newNoteIsTypingRef.current = false; // 同步更新 ref
+    }
+  }, [isZoomed, selectedObjectName]);
+  
+  // 当新笔记本当前段改变时，开始新的打字机动画
+  useEffect(() => {
+    if (isZoomed && selectedObjectName === 'newNote' && newNoteCurrentSegment < newNoteTexts.current.length && newNoteCurrentSegment >= 0) {
+      if (newNoteTypewriterTimerRef.current) {
+        clearTimeout(newNoteTypewriterTimerRef.current);
+        newNoteTypewriterTimerRef.current = null;
+      }
+      
+      // 检查当前段是否是闪回段
+      const segments = flashbackSegmentMap['newNote'] || [];
+      const isCurrentSegmentFlashback = segments.includes(newNoteCurrentSegment);
+      
+      // 如果是闪回段，立即清空文字，等待闪回效果完成后再开始打字机动画
+      if (isCurrentSegmentFlashback) {
+        setNewNoteDisplayedText('');
+        setNewNoteIsTyping(false);
+        newNoteIsTypingRef.current = false;
+      }
+      
+      // 如果是闪回段，等待闪回效果完成（4秒淡入+等待）；否则正常延迟
+      const delay = isCurrentSegmentFlashback ? 4050 : 50; // 闪回效果4秒 + 50ms缓冲
+      
+      const timer = setTimeout(() => {
+        startNewNoteTypewriter(newNoteTexts.current[newNoteCurrentSegment]);
+      }, delay);
+      return () => clearTimeout(timer);
+    }
+  }, [newNoteCurrentSegment, isZoomed, selectedObjectName, startNewNoteTypewriter]);
+  
+  // 清理打字机定时器
+  useEffect(() => {
+    return () => {
+      if (sinkTypewriterTimerRef.current) {
+        clearTimeout(sinkTypewriterTimerRef.current);
+      }
+      if (mokaPotTypewriterTimerRef.current) {
+        clearTimeout(mokaPotTypewriterTimerRef.current);
+      }
+      if (oldNoteTypewriterTimerRef.current) {
+        clearTimeout(oldNoteTypewriterTimerRef.current);
+      }
+      if (newNoteTypewriterTimerRef.current) {
+        clearTimeout(newNoteTypewriterTimerRef.current);
+      }
+    };
+  }, []);
   
   // 注意：自动选中第一个物件的逻辑已移到 handleObjectsExtracted 回调中
   
@@ -1475,7 +2831,8 @@ function Chapter1ModelViewer() {
           width: '100%', 
           height: '100%',
           background: 'transparent',
-          opacity: cameraData ? 1 : 0, // 相机数据加载前隐藏画布
+          // 相机数据加载前隐藏；开场未结束也隐藏
+          opacity: cameraData && canShowModel ? 1 : 0,
           transition: 'opacity 0.3s ease-in'
         }}
       >
@@ -1503,6 +2860,8 @@ function Chapter1ModelViewer() {
           onObjectsExtracted={handleObjectsExtracted}
           selectedObject={selectedObjectName}
           isZoomed={isZoomed}
+          pendingInstantZoomRef={pendingInstantZoomRef}
+          initialUserZoomsRef={initialUserZoomsRef}
         />
         
         {/* Bloom 光晕效果已禁用 */}
@@ -1511,25 +2870,281 @@ function Chapter1ModelViewer() {
         {/* <gridHelper args={[10, 10]} /> */}
       </Canvas>
       
-      {/* 加载提示 */}
-      {!cameraData && (
+      {/* 第一章開場 - 逐句淡入，結束後提示任意鍵繼續；期間隱藏建模 */}
+      {showIntroOverlay && (
         <div style={{
           position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          background: 'rgba(0, 0, 0, 0.8)',
-          color: 'white',
-          padding: '20px 30px',
-          borderRadius: '15px',
-          fontSize: '16px',
-          textAlign: 'center',
-          pointerEvents: 'none',
-          animation: 'pulse 1.5s ease-in-out infinite',
-          zIndex: 100
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: '#000000',
+          color: '#eaeaea',
+          zIndex: 200,
+          padding: '40px',
+          boxSizing: 'border-box'
         }}>
-          <div style={{ fontWeight: 'bold', marginBottom: '5px' }}>
-            加載場景中...
+          <div style={{
+            width: 'min(900px, 90vw)',
+            lineHeight: 1.9,
+            fontSize: '18px',
+            letterSpacing: '0.5px',
+            textAlign: 'left',
+            fontWeight: 400,
+            opacity: introOpacity,
+            position: 'relative',
+            filter: showVisualEffect ? 'none' : 'none',
+            transform: showVisualEffect ? 'perspective(500px) rotateX(2deg) scale(1.02)' : 'none',
+            transition: showVisualEffect ? 'transform 0.1s linear' : 'opacity 1s ease-out',
+            animation: showVisualEffect ? 'breatheBlurText 2.5s ease-in-out infinite' : 'none'
+          }}>
+            {/* 模糊呼吸效果覆盖层 */}
+            {showVisualEffect && (
+              <>
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  WebkitBackdropFilter: 'blur(1px)',
+                  backdropFilter: 'blur(1px)',
+                  animation: 'breatheBlur 2.5s ease-in-out infinite',
+          pointerEvents: 'none',
+                  zIndex: 1.5,
+                  mixBlendMode: 'overlay',
+                  opacity: 0.7
+                }} />
+                <div style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: '100%',
+                  WebkitBackdropFilter: 'blur(3px)',
+                  backdropFilter: 'blur(3px)',
+                  animation: 'breatheBlur 2.8s ease-in-out infinite 0.5s',
+                  pointerEvents: 'none',
+                  zIndex: 1.5,
+                  mixBlendMode: 'hard-light',
+                  opacity: 0.5
+                }} />
+              </>
+            )}
+            <div
+              ref={introScrollRef}
+              style={{
+                maxHeight: '70vh',   // 垂直邊界
+                paddingTop: '6vh',
+                paddingBottom: '6vh',
+                overflowY: 'auto',
+                overscrollBehavior: 'contain',
+                scrollbarWidth: 'none',
+                position: 'relative',
+                zIndex: 1
+              }}
+            >
+              {introVisibleLines.map((line, idx) => (
+                <div
+                  key={`intro-line-${idx}`}
+                  style={{
+                    marginBottom: '10px',
+                    color: '#f0f0f0',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    transform: showVisualEffect ? `rotate(${Math.sin(idx * 0.5) * 2}deg) skewX(${Math.cos(idx * 0.3) * 1}deg)` : 'none',
+                    transition: showVisualEffect ? 'transform 0.1s linear' : 'none'
+                  }}
+                >
+                  {line}
+                </div>
+              ))}
+            </div>
+            {isIntroDone && !awaitingAnyKey && !isSceneReady && showIntroOverlay && (
+              <div style={{
+                marginTop: '16px',
+                color: '#cccccc',
+                textAlign: 'center',
+                fontSize: '14px',
+                opacity: 0.8
+              }}>
+                場景載入中...
+          </div>
+            )}
+            {awaitingAnyKey && (
+              <div style={{
+                marginTop: '16px',
+                color: '#FFD700',
+                textAlign: 'center',
+                fontSize: '14px',
+                opacity: 0.9
+              }}>
+                按下任意鍵繼續
+              </div>
+            )}
+            
+            {/* 视觉效果：红色不规则色块覆盖层 */}
+            {showVisualEffect && (
+              <>
+                {/* 红色色块1 - 液体飞溅效果 */}
+                <div style={{
+                  position: 'absolute',
+                  top: '10%',
+                  left: '15%',
+                  transform: 'rotate(15deg)',
+                  transformOrigin: 'center center',
+                  zIndex: 2,
+                  pointerEvents: 'none'
+                }}>
+                  <div style={{
+                    width: '120px',
+                    height: '80px',
+                    background: 'rgba(180, 30, 30, 0.6)',
+                    clipPath: 'polygon(15% 0%, 25% 5%, 35% 2%, 50% 0%, 65% 8%, 75% 15%, 85% 25%, 92% 40%, 95% 55%, 88% 70%, 75% 85%, 60% 95%, 45% 100%, 30% 95%, 18% 85%, 8% 70%, 2% 55%, 0% 40%, 5% 25%, 10% 12%, 12% 3%)',
+                    animation: 'breatheBlock 2.3s ease-in-out infinite, breatheBlockScale 2.3s ease-in-out infinite',
+                    transformOrigin: 'center center'
+                  }} />
+                </div>
+                {/* 红色色块2 - 液体飞溅效果 */}
+                <div style={{
+                  position: 'absolute',
+                  top: '40%',
+                  right: '20%',
+                  width: '150px',
+                  height: '100px',
+                  background: 'rgba(200, 20, 20, 0.5)',
+                  clipPath: 'polygon(0% 20%, 8% 10%, 20% 5%, 35% 2%, 50% 0%, 65% 5%, 78% 12%, 88% 22%, 95% 35%, 98% 50%, 95% 65%, 88% 78%, 75% 88%, 60% 95%, 45% 98%, 30% 95%, 18% 88%, 8% 75%, 2% 60%, 0% 45%, 3% 30%, 8% 18%)',
+                  transform: 'rotate(-20deg)',
+                  transformOrigin: 'center center',
+                  animation: 'breatheBlock 2.6s ease-in-out infinite, breatheBlockScale 2.6s ease-in-out infinite',
+                  zIndex: 2,
+                  pointerEvents: 'none'
+                }} />
+                {/* 红色色块3 - 液体飞溅效果 */}
+                <div style={{
+                  position: 'absolute',
+                  bottom: '30%',
+                  left: '30%',
+                  width: '100px',
+                  height: '90px',
+                  background: 'rgba(160, 40, 40, 0.55)',
+                  clipPath: 'polygon(20% 0%, 30% 8%, 40% 5%, 55% 2%, 70% 0%, 82% 8%, 90% 18%, 95% 32%, 98% 48%, 95% 65%, 88% 78%, 75% 88%, 60% 95%, 45% 98%, 30% 92%, 18% 82%, 8% 68%, 2% 52%, 0% 38%, 5% 25%, 12% 12%)',
+                  transform: 'rotate(25deg)',
+                  transformOrigin: 'center center',
+                  animation: 'breatheBlock 2.4s ease-in-out infinite, breatheBlockScale 2.4s ease-in-out infinite',
+                  zIndex: 2,
+                  pointerEvents: 'none'
+                }} />
+                {/* 红色色块4 - 液体飞溅效果 */}
+                <div style={{
+                  position: 'absolute',
+                  top: '60%',
+                  left: '5%',
+                  width: '130px',
+                  height: '85px',
+                  background: 'rgba(190, 25, 25, 0.5)',
+                  clipPath: 'polygon(5% 25%, 12% 15%, 25% 8%, 40% 3%, 55% 0%, 70% 5%, 82% 12%, 90% 22%, 95% 35%, 98% 50%, 95% 65%, 88% 78%, 75% 88%, 60% 95%, 45% 98%, 30% 92%, 18% 82%, 8% 68%, 2% 52%, 0% 38%, 3% 25%, 8% 15%)',
+                  transform: 'rotate(-15deg)',
+                  transformOrigin: 'center center',
+                  animation: 'breatheBlock 2.5s ease-in-out infinite, breatheBlockScale 2.5s ease-in-out infinite',
+                  zIndex: 2,
+                  pointerEvents: 'none'
+                }} />
+                {/* 红色色块5 - 液体飞溅效果 */}
+                <div style={{
+                  position: 'absolute',
+                  bottom: '20%',
+                  right: '10%',
+                  width: '110px',
+                  height: '95px',
+                  background: 'rgba(170, 35, 35, 0.6)',
+                  clipPath: 'polygon(25% 0%, 35% 8%, 45% 5%, 58% 2%, 72% 0%, 85% 8%, 92% 18%, 96% 32%, 98% 48%, 95% 65%, 88% 78%, 75% 88%, 60% 95%, 45% 98%, 30% 92%, 18% 82%, 8% 68%, 2% 52%, 0% 38%, 5% 25%, 12% 12%, 18% 3%)',
+                  transform: 'rotate(10deg)',
+                  transformOrigin: 'center center',
+                  animation: 'breatheBlock 2.2s ease-in-out infinite, breatheBlockScale 2.2s ease-in-out infinite',
+                  zIndex: 2,
+                  pointerEvents: 'none'
+                }} />
+                {/* 黑色色块（墨迹效果）- 液体飞溅效果 */}
+                <div style={{
+                  position: 'absolute',
+                  top: '25%',
+                  right: '35%',
+                  width: '90px',
+                  height: '70px',
+                  background: 'rgba(10, 10, 10, 0.7)',
+                  clipPath: 'polygon(12% 20%, 22% 12%, 35% 8%, 50% 5%, 65% 8%, 78% 15%, 88% 25%, 92% 38%, 95% 52%, 92% 65%, 85% 75%, 75% 82%, 62% 85%, 48% 82%, 35% 75%, 22% 65%, 12% 52%, 8% 38%, 5% 25%, 8% 15%)',
+                  transform: 'rotate(-30deg)',
+                  transformOrigin: 'center center',
+                  animation: 'breatheBlock 2.7s ease-in-out infinite, breatheBlockScale 2.7s ease-in-out infinite',
+                  zIndex: 2,
+                  pointerEvents: 'none'
+                }} />
+                
+                {/* 小飞溅点1 */}
+                <div style={{
+                  position: 'absolute',
+                  top: '15%',
+                  left: '25%',
+                  width: '25px',
+                  height: '35px',
+                  background: 'rgba(200, 30, 30, 0.5)',
+                  clipPath: 'polygon(30% 0%, 50% 10%, 70% 5%, 85% 15%, 95% 30%, 100% 50%, 90% 70%, 75% 85%, 55% 95%, 35% 90%, 18% 80%, 5% 65%, 0% 45%, 5% 25%, 15% 10%)',
+                  transform: 'rotate(45deg)',
+                  animation: 'breatheBlock 2.1s ease-in-out infinite, breatheBlockScale 2.1s ease-in-out infinite',
+                  zIndex: 2,
+                  pointerEvents: 'none'
+                }} />
+                
+                {/* 小飞溅点2 */}
+                <div style={{
+                  position: 'absolute',
+                  top: '50%',
+                  left: '8%',
+                  width: '20px',
+                  height: '30px',
+                  background: 'rgba(180, 25, 25, 0.5)',
+                  clipPath: 'polygon(25% 0%, 45% 8%, 65% 3%, 80% 12%, 92% 28%, 98% 48%, 90% 68%, 75% 82%, 55% 92%, 35% 88%, 20% 78%, 8% 62%, 2% 42%, 8% 22%, 18% 8%)',
+                  transform: 'rotate(-35deg)',
+                  animation: 'breatheBlock 2.4s ease-in-out infinite, breatheBlockScale 2.4s ease-in-out infinite',
+                  zIndex: 2,
+                  pointerEvents: 'none'
+                }} />
+                
+                {/* 小飞溅点3 */}
+                <div style={{
+                  position: 'absolute',
+                  bottom: '25%',
+                  right: '25%',
+                  width: '22px',
+                  height: '32px',
+                  background: 'rgba(190, 20, 20, 0.5)',
+                  clipPath: 'polygon(28% 0%, 48% 8%, 68% 4%, 82% 14%, 92% 30%, 96% 50%, 88% 70%, 72% 85%, 52% 94%, 32% 89%, 16% 79%, 5% 63%, 0% 43%, 6% 23%, 16% 9%)',
+                  transform: 'rotate(60deg)',
+                  animation: 'breatheBlock 2.3s ease-in-out infinite, breatheBlockScale 2.3s ease-in-out infinite',
+                  zIndex: 2,
+                  pointerEvents: 'none'
+                }} />
+                
+                {/* 小飞溅点4 */}
+                <div style={{
+                  position: 'absolute',
+                  top: '35%',
+                  right: '8%',
+                  width: '18px',
+                  height: '28px',
+                  background: 'rgba(170, 35, 35, 0.5)',
+                  clipPath: 'polygon(22% 0%, 42% 7%, 62% 3%, 78% 11%, 90% 26%, 95% 46%, 87% 66%, 70% 81%, 50% 90%, 30% 86%, 14% 76%, 3% 60%, 0% 40%, 5% 20%, 14% 6%)',
+                  transform: 'rotate(-50deg)',
+                  animation: 'breatheBlock 2.5s ease-in-out infinite, breatheBlockScale 2.5s ease-in-out infinite',
+                  zIndex: 2,
+                  pointerEvents: 'none'
+                }} />
+              </>
+            )}
           </div>
         </div>
       )}
@@ -1542,36 +3157,120 @@ function Chapter1ModelViewer() {
           bottom: '30px',
           left: '50%',
           transform: 'translateX(-50%)',
-          background: 'rgba(0, 0, 0, 0.9)',
-          color: '#FFD700',
-          padding: '15px 30px',
-          borderRadius: '12px',
-          fontSize: '16px',
-          fontWeight: 'bold',
-          textAlign: 'center',
+          width: 'auto',
+          minWidth: '400px',
+          maxWidth: '600px',
           pointerEvents: 'none',
           zIndex: 100,
-          border: '2px solid #FFD700',
-          boxShadow: '0 0 20px rgba(255, 215, 0, 0.5)',
           animation: 'fadeIn 0.3s ease-in'
         }}>
-          <div style={{ marginBottom: '5px' }}>
-            ✨ {selectedObjectName}
-          </div>
-          <div style={{ 
-            fontSize: '12px', 
-            color: '#ccc',
-            fontWeight: 'normal'
+          <div className="handdrawn-border" style={{
+            background: '#FFFFFF',
+            padding: '20px 30px',
+            boxShadow: '0px 4px 4px rgba(0, 0, 0, 0.25)',
+            position: 'relative'
           }}>
-            ⬅️ 左键 / 右键 ➡️ 切换物件 ({selectedObjectIndex + 1}/{interactiveObjects.length})
-            <br />
-            ⬇️ 下键: 放大查看详情
+          <div style={{ 
+              fontFamily: '点点像素体-方形, monospace',
+              fontStyle: 'normal',
+              fontWeight: 500,
+              fontSize: '24px',
+              lineHeight: '30px',
+              textAlign: 'center',
+              color: '#000000'
+            }}>
+              {selectedObjectName === 'newNote' && '新筆記本'}
+              {selectedObjectName === 'oldNote' && '舊筆記本'}
+              {selectedObjectName === 'mokaPot' && '摩卡壺'}
+              {selectedObjectName === 'sink' && '水槽'}
+            </div>
           </div>
+        </div>
+      )}
+      
+      {/* 全白不透明覆盖层 - 在回忆开始前显示 */}
+      {whiteOverlayVisible && (
+        <div
+          key={`white-overlay-${whiteOverlayKeyRef.current}`}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            background: '#FFFFFF',
+            pointerEvents: 'none',
+            zIndex: 145,
+            opacity: 1,
+            animation: 'white-overlay-fadeout 2s ease-out forwards'
+          }}
+        />
+      )}
+      
+      {/* 全屏闪回效果覆盖层 */}
+      {flashOverlayState !== 'none' && (
+        <div
+          key={`flash-${flashOverlayState}-${flashOverlayKeyRef.current}`}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            width: '100vw',
+            height: '100vh',
+            background: '#000',
+            pointerEvents: 'none',
+            zIndex: 140,
+            overflow: 'hidden',
+            opacity: flashOverlayState === 'active' ? 0.5 : 
+                     flashOverlayState === 'enter' ? 0 : 
+                     flashOverlayState === 'exit' ? 0.5 : flashOverlayOpacity,
+            animation: flashOverlayState === 'enter' ? 'flash-overlay-fadein 2s ease-out forwards' : 
+                       flashOverlayState === 'exit' ? 'flash-overlay-fadeout 2s ease-out forwards' : 'none'
+          }}
+        >
+          <video
+            ref={flashbackVideoRef}
+            src={flashbackVideoSrc}
+            muted
+            loop
+            playsInline
+            preload="auto"
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              filter: 'grayscale(0.2) contrast(1.35) brightness(1.05)',
+              opacity: flashOverlayState === 'active' ? 1 : 
+                       flashOverlayState === 'enter' ? 0 : 
+                       flashOverlayState === 'exit' ? 1 : flashbackVideoOpacity,
+              transform: 'scale(1.02)',
+              animation: flashOverlayState === 'enter' ? 'flash-video-fadein 2s ease-out forwards' : 
+                         flashOverlayState === 'exit' ? 'flash-video-fadeout 2s ease-out forwards' : 'none'
+            }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: flashOverlayState === 'exit'
+                ? 'rgba(0, 0, 0, 0.8)'
+                : 'rgba(255, 255, 255, 0.8)',
+              mixBlendMode: flashOverlayState === 'exit' ? 'multiply' : 'screen'
+            }}
+          />
         </div>
       )}
       
       {/* 放大状态的 UI 界面 - 左侧物件 + 右侧文字说明 */}
       {isZoomed && selectedObjectName && (
+        (selectedObjectName !== 'sink' && selectedObjectName !== 'mokaPot' && selectedObjectName !== 'oldNote' && selectedObjectName !== 'newNote') ||
+        (selectedObjectName === 'sink' && sinkDisplayedText) ||
+        (selectedObjectName === 'mokaPot' && mokaPotDisplayedText) ||
+        (selectedObjectName === 'oldNote' && oldNoteDisplayedText) ||
+        (selectedObjectName === 'newNote' && newNoteDisplayedText)
+      ) && (
         <div style={{
           position: 'absolute',
           top: 0,
@@ -1579,8 +3278,7 @@ function Chapter1ModelViewer() {
           width: '100%',
           height: '100%',
           pointerEvents: 'none',
-          zIndex: 100,
-          animation: 'fadeIn 0.3s ease-in'
+          zIndex: 150
         }}>
           {/* 右侧文字说明区域 - 固定在右边，垂直居中 */}
           <div style={{
@@ -1588,22 +3286,34 @@ function Chapter1ModelViewer() {
             top: '50%',
             right: '5%',
             transform: 'translateY(-50%)',
-            width: '40%',
-            maxWidth: '450px',
-            minHeight: '400px',
-            background: 'rgba(0, 0, 0, 0.9)',
-            color: 'white',
+            width: (selectedObjectName === 'sink' || selectedObjectName === 'mokaPot' || selectedObjectName === 'oldNote' || selectedObjectName === 'newNote') ? '50%' : '40%',
+            maxWidth: (selectedObjectName === 'sink' || selectedObjectName === 'mokaPot' || selectedObjectName === 'oldNote' || selectedObjectName === 'newNote') ? '600px' : '450px',
+            minHeight: (selectedObjectName === 'sink' || selectedObjectName === 'mokaPot' || selectedObjectName === 'oldNote' || selectedObjectName === 'newNote') ? '500px' : '400px',
+            pointerEvents: 'none',
+            opacity: 1,
+            transition: 'opacity 0.3s ease-in'
+          }}>
+            <div className="handdrawn-border" style={{
+              background: infoBoxTheme.background,
+              border: `3px solid ${infoBoxTheme.borderColor}`,
             padding: '35px',
-            borderRadius: '15px',
-            border: '2px solid #FFD700',
-            boxShadow: '0 0 40px rgba(255, 215, 0, 0.4)',
-            backdropFilter: 'blur(10px)'
+              boxShadow: '0px 4px 4px rgba(0, 0, 0, 0.25)',
+              position: 'relative',
+              width: '100%',
+              minHeight: (selectedObjectName === 'sink' || selectedObjectName === 'mokaPot' || selectedObjectName === 'oldNote' || selectedObjectName === 'newNote') ? '500px' : '400px',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden'
           }}>
             <h2 style={{
+                fontFamily: '点点像素体-方形, monospace',
+                fontStyle: 'normal',
+                fontWeight: 500,
               margin: '0 0 20px 0',
               fontSize: '28px',
-              color: '#FFD700',
-              borderBottom: '2px solid #FFD700',
+                lineHeight: '30px',
+                color: infoBoxTheme.textColor,
+                borderBottom: `1px solid ${infoBoxTheme.borderColor}`,
               paddingBottom: '10px'
             }}>
               {selectedObjectName === 'newNote' && '新筆記本'}
@@ -1613,45 +3323,36 @@ function Chapter1ModelViewer() {
             </h2>
             
             <div style={{
-              fontSize: '16px',
-              lineHeight: '1.8',
-              color: '#e0e0e0'
+                fontFamily: '点点像素体-方形, monospace',
+                fontStyle: 'normal',
+                fontWeight: 500,
+                fontSize: '24px',
+                lineHeight: '30px',
+                color: infoBoxTheme.textColor,
+                flex: 1,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word'
             }}>
-              {selectedObjectName === 'newNote' && (
-                <>
-                  <p>這是一本嶄新的筆記本，裡面記錄著最近的想法和靈感。</p>
-                  <p>封面光滑整潔，象徵著新的開始和無限可能。</p>
-                </>
-              )}
-              {selectedObjectName === 'oldNote' && (
-                <>
-                  <p>這是一本陪伴多年的舊筆記本，頁面已經泛黃。</p>
-                  <p>裡面記載著過去的回憶、想法和重要的筆記。</p>
-                </>
-              )}
-              {selectedObjectName === 'mokaPot' && (
-                <>
-                  <p>經典的摩卡壺，用來煮製濃郁的義式咖啡。</p>
-                  <p>每天早晨的咖啡香氣，是開始新一天的儀式。</p>
-                </>
-              )}
-              {selectedObjectName === 'sink' && (
-                <>
-                  <p>簡約的水槽區域，保持著整潔的狀態。</p>
-                  <p>這裡是日常生活中不可或缺的一部分。</p>
-                </>
-              )}
+              {selectedObjectName === 'newNote' && newNoteDisplayedText}
+              {selectedObjectName === 'oldNote' && oldNoteDisplayedText}
+              {selectedObjectName === 'mokaPot' && mokaPotDisplayedText}
+              {selectedObjectName === 'sink' && sinkDisplayedText}
             </div>
             
+              {shouldShowTriangle && (
             <div style={{
-              marginTop: '25px',
-              paddingTop: '20px',
-              borderTop: '1px solid rgba(255, 215, 0, 0.3)',
-              fontSize: '14px',
-              color: '#999',
-              textAlign: 'center'
-            }}>
-              ⬇️ 按下鍵返回
+                  position: 'absolute',
+                  bottom: '15px',
+                  right: '20px',
+                  width: 0,
+                  height: 0,
+                  borderLeft: '10px solid transparent',
+                  borderRight: '10px solid transparent',
+                  borderTop: `15px solid ${infoBoxTheme.textColor}`,
+                  animation: 'blink-indicator 2s ease-in-out infinite',
+                  pointerEvents: 'none'
+                }}></div>
+              )}
             </div>
           </div>
         </div>
@@ -1662,9 +3363,100 @@ function Chapter1ModelViewer() {
           from { opacity: 0; transform: translateX(-50%) translateY(-10px); }
           to { opacity: 1; transform: translateX(-50%) translateY(0); }
         }
+        @keyframes fadeInRight {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes introFadeIn {
+          from { opacity: 0; transform: translateY(6px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
         @keyframes pulse {
           0%, 100% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
           50% { opacity: 0.8; transform: translate(-50%, -50%) scale(1.05); }
+        }
+        @keyframes pulseRed {
+          from { opacity: 0.5; transform: scale(1) rotate(0deg); }
+          to { opacity: 0.8; transform: scale(1.1) rotate(5deg); }
+        }
+        @keyframes breatheBlur {
+          0%, 100% { 
+            -webkit-backdrop-filter: blur(1px);
+            backdrop-filter: blur(1px);
+            opacity: 0.3;
+          }
+          50% { 
+            -webkit-backdrop-filter: blur(4px);
+            backdrop-filter: blur(4px);
+            opacity: 0.6;
+          }
+        }
+        @keyframes breatheBlurText {
+          0%, 100% { 
+            filter: blur(1px) contrast(1.5) saturate(2);
+          }
+          50% { 
+            filter: blur(3px) contrast(1.8) saturate(2.5);
+          }
+        }
+        @keyframes breatheBlock {
+          0%, 100% { 
+            opacity: 0.5;
+            filter: brightness(1);
+          }
+          50% { 
+            opacity: 0.75;
+            filter: brightness(1.3);
+          }
+        }
+        @keyframes breatheBlockScale {
+          0%, 100% { 
+            transform: scale(1) rotate(0deg);
+          }
+          50% { 
+            transform: scale(1.15) rotate(8deg);
+          }
+        }
+        @keyframes blink-indicator {
+          0%, 100% {
+            opacity: 1;
+          }
+          50% {
+            opacity: 0;
+          }
+        }
+        @keyframes flash-enter {
+          0% { 
+            opacity: 1;
+          }
+          100% { 
+            opacity: 0.5;
+          }
+        }
+        @keyframes flash-exit {
+          0% { opacity: 1; }
+          70% { opacity: 1; }
+          100% { opacity: 0; }
+        }
+        @keyframes flash-overlay-fadein {
+          from { opacity: 0; }
+          to { opacity: 0.5; }
+        }
+        @keyframes flash-overlay-fadeout {
+          from { opacity: 0.5; }
+          to { opacity: 0; }
+        }
+        @keyframes flash-video-fadein {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes flash-video-fadeout {
+          from { opacity: 1; }
+          to { opacity: 0; }
+        }
+        @keyframes white-overlay-fadeout {
+          from { opacity: 1; }
+          to { opacity: 0; }
         }
       `}</style>
     </div>
@@ -1677,5 +3469,8 @@ useGLTF.preload(`${process.env.PUBLIC_URL || ''}/images/glb/light.glb`);
 useGLTF.preload(`${process.env.PUBLIC_URL || ''}/images/glb/interactive.glb`);
 
 export default Chapter1ModelViewer;
+
+
+
 
 

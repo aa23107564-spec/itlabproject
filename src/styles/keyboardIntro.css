@@ -56,7 +56,7 @@
 }
 
 .keyboard-label-left {
-  top: 160px;
+  top: 180px;
   left: 41%;
   transform: translateX(-50%);
   gap: 4px;
@@ -71,10 +71,19 @@
 }
 
 .keyboard-label-right {
-  top: 160px;
+  top: 180px;
   right: 41%;
   transform: translateX(50%);
   gap: 4px;
+}
+
+/* 第二章專用：左右標籤位置調整 */
+.chapter-2 .keyboard-label-left {
+  top: 160px;
+}
+
+.chapter-2 .keyboard-label-right {
+  top: 160px;
 }
 
 /* 文字樣式 */
