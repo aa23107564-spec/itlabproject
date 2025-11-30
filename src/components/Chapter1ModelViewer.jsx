@@ -132,54 +132,78 @@ function SceneRotationController({ groupRef, selectedObject, isZoomed, interacti
     const newRotation = currentRotation + rotationDiff * lerpFactor;
     groupRef.current.rotation.y = newRotation;
     
-    // 2. 放大/缩小动画 - 处理所有物件 ⭐
-    const scaleLerpFactor = pendingInstantZoomRef.current ? 0.35 : 0.08;
+    // 2. 放大/缩小动画 - 优化：只在需要时处理物件 ⭐
+    // 第一次放大时使用更大的 lerp 因子，让动画更快更流畅
+    const scaleLerpFactor = pendingInstantZoomRef.current ? 0.5 : 0.08;
     
-    // 遍历所有已保存的父节点，确保所有非选中物件都回到原位 ⭐
-    originalParentTransformsRef.current.forEach((original, objectName) => {
-      if (!interactiveModel || !interactiveModel.nodes || !interactiveModel.nodes[objectName]) return;
-      
-      const parentNode = interactiveModel.nodes[objectName];
-      const isCurrentObject = (objectName === selectedObject);
-      
-      // 决定目标状态：只有当前选中且 isZoomed 为 true 时才放大
-      const shouldZoom = isCurrentObject && isZoomed;
-      const objectScale = scaleMapRef.current[objectName] || 8.0;
-      const targetScale = shouldZoom ? objectScale : 1.0;
-      
-      // 🐛 调试：偶尔打印所有物件状态
-      
-      // 缩放父节点（所有子物件会自动跟随，保持相对位置）
-      parentNode.scale.x += (original.scale.x * targetScale - parentNode.scale.x) * scaleLerpFactor;
-      parentNode.scale.y += (original.scale.y * targetScale - parentNode.scale.y) * scaleLerpFactor;
-      parentNode.scale.z += (original.scale.z * targetScale - parentNode.scale.z) * scaleLerpFactor;
-      
-      if (shouldZoom) {
+    if (isZoomed && selectedObject) {
+      // 放大时：只处理当前选中的物件
+      const original = originalParentTransformsRef.current.get(selectedObject);
+      if (original && interactiveModel?.nodes?.[selectedObject]) {
+        const parentNode = interactiveModel.nodes[selectedObject];
+        const objectScale = scaleMapRef.current[selectedObject] || 8.0;
+        const targetScale = objectScale;
+        
+        // 缩放父节点（所有子物件会自动跟随，保持相对位置）
+        parentNode.scale.x += (original.scale.x * targetScale - parentNode.scale.x) * scaleLerpFactor;
+        parentNode.scale.y += (original.scale.y * targetScale - parentNode.scale.y) * scaleLerpFactor;
+        parentNode.scale.z += (original.scale.z * targetScale - parentNode.scale.z) * scaleLerpFactor;
+        
         // 放大时：使用世界坐标系计算，确保物件往相机的固定方向移动 ⭐
         
-        // 1️⃣ 将原始局部位置转换为世界坐标
-        const originalWorldPos = new THREE.Vector3().copy(original.position);
-        const parentOfParent = parentNode.parent;
-        if (parentOfParent) {
-          parentOfParent.localToWorld(originalWorldPos);
+        // 优化：第一次放大时缓存世界坐标转换结果，避免每帧重复计算
+        if (pendingInstantZoomRef.current && !parentNode.userData.cachedTargetPos) {
+          // 1️⃣ 将原始局部位置转换为世界坐标
+          const originalWorldPos = new THREE.Vector3().copy(original.position);
+          const parentOfParent = parentNode.parent;
+          if (parentOfParent) {
+            parentOfParent.localToWorld(originalWorldPos);
+          }
+          
+          // 2️⃣ 在世界坐标系中定义偏移（根据物件从 offsetMapRef 获取）⭐
+          const offset = offsetMapRef.current[selectedObject] || { x: 3, y: 1, z: 4 };
+          const worldOffsetX = offset.x;  // 屏幕向左
+          const worldOffsetY = offset.y;  // 屏幕向上
+          const worldOffsetZ = offset.z;  // 屏幕向前
+          
+          // 3️⃣ 计算目标世界位置（基于原始位置 + 偏移）
+          const targetWorldPos = new THREE.Vector3(
+            originalWorldPos.x + worldOffsetX,
+            originalWorldPos.y + worldOffsetY,
+            originalWorldPos.z + worldOffsetZ
+          );
+          
+          // 4️⃣ 将目标世界位置转换回父节点的局部坐标系
+          if (parentOfParent) {
+            parentOfParent.worldToLocal(targetWorldPos);
+          }
+          
+          // 缓存目标位置，避免每帧重复计算
+          parentNode.userData.cachedTargetPos = targetWorldPos.clone();
         }
         
-        // 2️⃣ 在世界坐标系中定义偏移（根据物件从 offsetMapRef 获取）⭐
-        const offset = offsetMapRef.current[objectName] || { x: 3, y: 1, z: 4 };
-        const worldOffsetX = offset.x;  // 屏幕向左
-        const worldOffsetY = offset.y;  // 屏幕向上
-        const worldOffsetZ = offset.z;  // 屏幕向前
-        
-        // 3️⃣ 计算目标世界位置（基于原始位置 + 偏移）
-        const targetWorldPos = new THREE.Vector3(
-          originalWorldPos.x + worldOffsetX,
-          originalWorldPos.y + worldOffsetY,
-          originalWorldPos.z + worldOffsetZ
-        );
-        
-        // 4️⃣ 将目标世界位置转换回父节点的局部坐标系
-        if (parentOfParent) {
-          parentOfParent.worldToLocal(targetWorldPos);
+        // 使用缓存的目标位置或实时计算
+        let targetWorldPos;
+        if (parentNode.userData.cachedTargetPos) {
+          targetWorldPos = parentNode.userData.cachedTargetPos;
+        } else {
+          // 非第一次放大时，实时计算（保持原有逻辑）
+          const originalWorldPos = new THREE.Vector3().copy(original.position);
+          const parentOfParent = parentNode.parent;
+          if (parentOfParent) {
+            parentOfParent.localToWorld(originalWorldPos);
+          }
+          
+          const offset = offsetMapRef.current[selectedObject] || { x: 3, y: 1, z: 4 };
+          targetWorldPos = new THREE.Vector3(
+            originalWorldPos.x + offset.x,
+            originalWorldPos.y + offset.y,
+            originalWorldPos.z + offset.z
+          );
+          
+          if (parentOfParent) {
+            parentOfParent.worldToLocal(targetWorldPos);
+          }
         }
         
         // 5️⃣ 平滑插值到目标位置
@@ -195,12 +219,16 @@ function SceneRotationController({ groupRef, selectedObject, isZoomed, interacti
         // 当缩放进度 >= 98% 时，认为已完全放大，开始自转
         if (scaleProgress >= 0.98) {
           // 获取旋转中心偏移配置 ⭐
-          const pivotOffset = rotationCenterOffsetRef.current[objectName] || { x: 0, y: 0, z: 0 };
+          const pivotOffset = rotationCenterOffsetRef.current[selectedObject] || { x: 0, y: 0, z: 0 };
 
           if (pendingInstantZoomRef.current) {
             pendingInstantZoomRef.current = false;
             if (initialUserZoomsRef.current < 2) {
               initialUserZoomsRef.current += 1;
+            }
+            // 清除缓存，后续使用实时计算
+            if (parentNode.userData.cachedTargetPos) {
+              delete parentNode.userData.cachedTargetPos;
             }
           }
           
@@ -238,7 +266,7 @@ function SceneRotationController({ groupRef, selectedObject, isZoomed, interacti
           // 调试：输出旋转信息（只输出一次）
           if (!parentNode.userData.rotationLogged) {
             parentNode.userData.rotationLogged = true;
-            console.log(`🔄 物件自转 [${objectName}]:`, {
+            console.log(`🔄 物件自转 [${selectedObject}]:`, {
               旋转中心偏移: `(${pivotOffset.x}, ${pivotOffset.y}, ${pivotOffset.z})`,
               当前位置: `(${parentNode.position.x.toFixed(2)}, ${parentNode.position.y.toFixed(2)}, ${parentNode.position.z.toFixed(2)})`,
               '提示': '可在 rotationCenterOffsetRef 中调整 mokaPot 的 y 偏移值'
@@ -249,23 +277,87 @@ function SceneRotationController({ groupRef, selectedObject, isZoomed, interacti
           const originalRotationY = original.rotation.y;
           parentNode.rotation.y += (originalRotationY - parentNode.rotation.y) * scaleLerpFactor;
         }
-      } else {
-        // 缩小时（或非当前选中物件）：回到原始位置和旋转 ⭐
-        parentNode.position.x += (original.position.x - parentNode.position.x) * scaleLerpFactor;
-        parentNode.position.y += (original.position.y - parentNode.position.y) * scaleLerpFactor;
-        parentNode.position.z += (original.position.z - parentNode.position.z) * scaleLerpFactor;
-        
-        // 恢复原始旋转角度 ⭐
-        parentNode.rotation.x += (original.rotation.x - parentNode.rotation.x) * scaleLerpFactor;
-        parentNode.rotation.y += (original.rotation.y - parentNode.rotation.y) * scaleLerpFactor;
-        parentNode.rotation.z += (original.rotation.z - parentNode.rotation.z) * scaleLerpFactor;
-        
-        // 重置调试标记 ⭐
-        if (parentNode.userData.rotationLogged) {
-          parentNode.userData.rotationLogged = false;
-        }
       }
-    });
+      
+      // 处理其他需要回到原位的物件（只处理那些不在原位的）
+      originalParentTransformsRef.current.forEach((otherOriginal, objectName) => {
+        if (objectName === selectedObject) return; // 跳过当前选中的物件
+        if (!interactiveModel?.nodes?.[objectName]) return;
+        
+        const otherParentNode = interactiveModel.nodes[objectName];
+        const currentScale = otherParentNode.scale.x;
+        const originalScale = otherOriginal.scale.x;
+        
+        // 只处理那些不在原位的物件（scale 不是 1.0 或位置不在原位）
+        const scaleDiff = Math.abs(currentScale - originalScale);
+        const posDiff = Math.abs(otherParentNode.position.x - otherOriginal.position.x) +
+                       Math.abs(otherParentNode.position.y - otherOriginal.position.y) +
+                       Math.abs(otherParentNode.position.z - otherOriginal.position.z);
+        
+        if (scaleDiff > 0.01 || posDiff > 0.01) {
+          // 缩放回到原位
+          otherParentNode.scale.x += (originalScale - otherParentNode.scale.x) * scaleLerpFactor;
+          otherParentNode.scale.y += (otherOriginal.scale.y - otherParentNode.scale.y) * scaleLerpFactor;
+          otherParentNode.scale.z += (otherOriginal.scale.z - otherParentNode.scale.z) * scaleLerpFactor;
+          
+          // 位置回到原位
+          otherParentNode.position.x += (otherOriginal.position.x - otherParentNode.position.x) * scaleLerpFactor;
+          otherParentNode.position.y += (otherOriginal.position.y - otherParentNode.position.y) * scaleLerpFactor;
+          otherParentNode.position.z += (otherOriginal.position.z - otherParentNode.position.z) * scaleLerpFactor;
+          
+          // 恢复原始旋转角度
+          otherParentNode.rotation.x += (otherOriginal.rotation.x - otherParentNode.rotation.x) * scaleLerpFactor;
+          otherParentNode.rotation.y += (otherOriginal.rotation.y - otherParentNode.rotation.y) * scaleLerpFactor;
+          otherParentNode.rotation.z += (otherOriginal.rotation.z - otherParentNode.rotation.z) * scaleLerpFactor;
+          
+          // 重置调试标记
+          if (otherParentNode.userData.rotationLogged) {
+            otherParentNode.userData.rotationLogged = false;
+          }
+        }
+      });
+    } else {
+      // 缩小时：只处理不在原位的物件，跳过已在原位的物件
+      originalParentTransformsRef.current.forEach((original, objectName) => {
+        if (!interactiveModel?.nodes?.[objectName]) return;
+        
+        const parentNode = interactiveModel.nodes[objectName];
+        const currentScale = parentNode.scale.x;
+        const originalScale = original.scale.x;
+        
+        // 检查是否已在原位（scale 和 position 都接近原始值）
+        const scaleDiff = Math.abs(currentScale - originalScale);
+        const posDiff = Math.abs(parentNode.position.x - original.position.x) +
+                       Math.abs(parentNode.position.y - original.position.y) +
+                       Math.abs(parentNode.position.z - original.position.z);
+        const rotDiff = Math.abs(parentNode.rotation.x - original.rotation.x) +
+                       Math.abs(parentNode.rotation.y - original.rotation.y) +
+                       Math.abs(parentNode.rotation.z - original.rotation.z);
+        
+        // 只处理那些不在原位的物件
+        if (scaleDiff > 0.01 || posDiff > 0.01 || rotDiff > 0.01) {
+          // 缩放回到原位
+          parentNode.scale.x += (originalScale - parentNode.scale.x) * scaleLerpFactor;
+          parentNode.scale.y += (original.scale.y - parentNode.scale.y) * scaleLerpFactor;
+          parentNode.scale.z += (original.scale.z - parentNode.scale.z) * scaleLerpFactor;
+          
+          // 位置回到原位
+          parentNode.position.x += (original.position.x - parentNode.position.x) * scaleLerpFactor;
+          parentNode.position.y += (original.position.y - parentNode.position.y) * scaleLerpFactor;
+          parentNode.position.z += (original.position.z - parentNode.position.z) * scaleLerpFactor;
+          
+          // 恢复原始旋转角度
+          parentNode.rotation.x += (original.rotation.x - parentNode.rotation.x) * scaleLerpFactor;
+          parentNode.rotation.y += (original.rotation.y - parentNode.rotation.y) * scaleLerpFactor;
+          parentNode.rotation.z += (original.rotation.z - parentNode.rotation.z) * scaleLerpFactor;
+          
+          // 重置调试标记
+          if (parentNode.userData.rotationLogged) {
+            parentNode.userData.rotationLogged = false;
+          }
+        }
+      });
+    }
     
     // 更新 selectedParentRef 为当前选中的父节点
     if (interactiveModel && interactiveModel.nodes && interactiveModel.nodes[selectedObject]) {
@@ -1372,7 +1464,7 @@ function Chapter1ModelViewer() {
   // 章节开场文字与显示控制
   const introLinesRef = useRef([
     '他蜷縮在檯燈的光暈中，鍵盤的敲擊聲如鼓點般零碎的刺破房間中的寂靜。',
-    '整個房間像是被遺棄的巢穴，米黃色的牆壁貼滿著雜亂的便利貼',
+    '整個房間像是被遺棄的巢穴，米黃色的牆壁貼滿著雜亂的便利貼。',
     '各個字跡扭曲，是種不曾期望他人理解的隨意。',
     '書桌旁的摩卡壺肆意尖叫，咖啡的氣味猶如燒焦的記憶，瘋狂撕裂人的理性。',
     '對於咖啡杯而言，這是今晚的第五杯咖啡了，然而對他而言，這是星期一的第71個小時了。',
@@ -1381,10 +1473,10 @@ function Chapter1ModelViewer() {
     '「我要救贖...! 你他媽的憑什麼...操，市場到底要什麼?」',
     '開始看不清楚螢幕上的文字，一塊紅綠一塊黑的，方才清晰可見的章節現在變成血、墨扭曲而成的漩渦。',
     '好不容易看清了文字，但完全無法理解，看來腦袋已經無法清晰對文字進行解碼。',
-    '一個英雄的故事，但卻在每一行都清楚的表示:',
-    '「黷龘靁鸞灪讜驫贇朸纔羼躚霻靇邐矙鱻黌贔鼗」',
+    '一個英雄的故事，但卻在每一行都清楚的表示：',
+    '「黷龘靁鸞灪讜驫贇朸纔羼躚霻靇邐矙鱻黌贔鼗」。',
     '太好了，真是一個賺人熱淚的校園故事!!',
-    '無力的瞥向角落的電話，就在視線合上的一瞬',
+    '無力的瞥向角落的電話，就在視線合上的一瞬。',
     '出版社的電話響起...',
     '「怎麼不她媽去死! 沒錢談什麼藝術?」',
     '轉瞬之間電話開始飛行並直直砸毀於牆壁。',
@@ -1407,16 +1499,31 @@ function Chapter1ModelViewer() {
   const typingTimeoutRef = useRef(null);
   const awaitingAnyKeyRef = useRef(false);
   const phoneRingAudioRef = useRef(null); // 电话铃声音频引用
+  const phoneCrashAudioRef = useRef(null); // 电话砸墙声音频引用
+  const wallHitAudioRef = useRef(null); // 槌墙声音频引用
+  const bloodSprayAudioRef = useRef(null); // 喷血声音频引用
+  const noteDropAudioRef = useRef(null); // 笔记掉落声音频引用
+  const coffeeBeanDropAudioRef = useRef(null); // 咖啡豆掉落声音频引用
+  const continuousPenClickAudioRef = useRef(null); // 连续按笔声音频引用
+  const punchStomachAudioRef = useRef(null); // 拳打肚子声音频引用
+  const brokenPhoneAudioRef = useRef(null); // 坏掉电话声音频引用
+  const rotateModelAudioRef = useRef(null); // 旋转建模声音频引用
+  const sinkDripAudioRef = useRef(null); // 水槽水滴声音频引用
+  const sinkDripTimerRef = useRef(null); // 水槽水滴声定时器引用
+  const bgmAudioRef = useRef(null); // 第一章背景音乐引用
   const canShowModelRef = useRef(false); // 跟踪建模画面是否已显示
   const isSceneReadyRef = useRef(false); // 跟踪场景是否加载完成
   const isWarmupDoneRef = useRef(false); // 预热是否完成
+  const pressedKeysRef = useRef(new Set()); // 跟踪当前按下的键，用于检测组合键
+  const keyPressTimesRef = useRef({}); // 跟踪按键时间，用于检测短时间内按下的组合键
+  const pendingKeyActionRef = useRef(null); // 用于延迟执行的单个键操作
   
   // 水槽文字内容（分段）
   const sinkTexts = useRef([
     '人類總是愛怪東怪西，總說要安靜才能專注，還為了讀書跑去咖啡廳。\n\n你雖可以說咖啡廳安靜，但你不會說咖啡廳比空無一人的家中還要安靜；\n\n人類是一個奇怪的生物，我們喜歡專注，因為專注會提高我們的行事效率。\n\n但此處我不是想討論這個。',
     '你有沒有一種經驗?在寧靜的深夜，當你不斷的想要入睡\n\n但你始終會聽到那該死的鄰居不知道他家哪一個破東西一直製造出規律的聲響而導致你徹夜未眠。\n\n咚..咚..咚..咚..\n\n你好想知道到底是什麼鬼東西可以造出這種失眠製造裝置。\n\n可是奇怪了，我們可以在人流來往的咖啡廳中專注工作。\n\n那麼區區一個永不間段規律滴水交響曲怎麼會難倒你專注地睡眠呢?',
     '大二的宿舍的夜晚，我本應該準備專注打稿，卻因為室友不斷按壓的筆聲、抖腳的頻率、身影輕微在餘光的晃動，不斷的分心，腦子亂。隨手敲出一段文字，干擾又從耳邊傳來...\n\n"',
-    '我一拳灌在室友肚子\n\n輕扶住他的頭，讓他的鼻軟骨與我的膝蓋親密接觸\n\n年輕真好，倒頭就睡，這下可以好好打稿了\n\n"',
+    '我一拳灌在室友肚子\n\n輕扶住他的頭，讓他的鼻軟骨與我的膝蓋親密接觸\n\n年輕真好，倒頭就睡，這下可以好好打稿了\n\n"。',
     '反應過來發現，稿子上無意識的填滿我的幻想。',
     '啊啊，為什麼會說到這邊呢?真是奇怪...隨意的擺弄手中的咖啡杯，我好像又忘記了什麼。\n\n對了!\n\n寫寫寫寫寫寫寫，又想去哪裡了\n\n我的曠世巨作還滿懷欣喜的躺臥在從隔壁學校低價買回來的課桌椅上\n\n但我還是比較習慣稱他們為天才作家的書桌。\n\n「唉...我想也就這樣了吧」話落便站起身子，沒有任何緣由的環顧四周。\n\n……'
   ]);
@@ -1431,7 +1538,7 @@ function Chapter1ModelViewer() {
   
   // 摩卡壺文字内容（分段）
   const mokaPotTexts = useRef([
-    '「你好，大家好，我是新來的，人類」\n\n「不知道各位會不會介意我待在這裡?」\n\n「啊，對了，忘了跟大家說，敝人有在寫一些隨感...散文?不是不是，沒有到那種程度」\n\n「但你說可以出散文集?哇，不敢當不敢當」\n\n有云不知誰云，不做無敗!意思是只要不做就沒有失敗。\n\n話說剛剛是在誰在說話?\n\n摩卡壺?別鬧了，你吃咖啡豆，乖\n\n話說這壺是誰送的，我沒怎麼印象?',
+    '「你好，大家好，我是新來的，人類」\n\n「不知道各位會不會介意我待在這裡?」\n\n「啊，對了，忘了跟大家說，敝人有在寫一些隨感...散文?不是不是，沒有到那種程度」\n\n「但你說可以出散文集?哇，不敢當不敢當」\n\n有云不知誰云，不做無敗!意思是只要不做就沒有失敗。\n\n話說剛剛是在誰在說話?\n\n摩卡壺?別鬧了，你吃咖啡豆，乖。\n\n話說這壺是誰送的，我沒怎麼印象?',
     '其實我從來不知道要寫什麼。\n\n「哇!你在寫小說嗎?好厲害，讓我看看!」\n\n「剛來到業界先慢慢習慣吧，我們看好你。」\n\n「反應確實不錯啊，你真是上無人能及!」\n\n「說過多少遍了，你就只會寫這種東西嗎...?」\n\n「"恭喜，來自***的投稿獲得本次的金獎"網站如此刊登著。」\n\n「你有想要嘗試其他創作嗎?」\n\n我不懂，我每次都是一樣的，為什麼每次都不一樣。',
     '阿，摩卡壺是編輯送的。\n\n上次新作開天窗，他的怒容......想到就顫抖。\n\n但突然想不起她的長相?算了，不記得、沒印象、算了。'
   ]);
@@ -1446,7 +1553,7 @@ function Chapter1ModelViewer() {
   
   // 旧笔记本文字内容（分段）
   const oldNoteTexts = useRef([
-    '筆記是這樣子的\n\n人們會一直持續換新的筆記本，不是因為寫完了，而是因為要記錄的東西結束了。\n\n但為了區隔開不同的事物，就算還有空間，我們也不會因此而勉強自己再寫下去\n\n沒錯\n\n因為已經結束了，即便還能寫下去，不同的內容不會寫在同一本筆記本裡\n\n更何況是不同人',
+    '筆記是這樣子的\n\n人們會一直持續換新的筆記本，不是因為寫完了，而是因為要記錄的東西結束了。\n\n但為了區隔開不同的事物，就算還有空間，我們也不會因此而勉強自己再寫下去。\n\n沒錯。\n\n因為已經結束了，即便還能寫下去，不同的內容不會寫在同一本筆記本裡。\n\n更何況是不同人。',
     '大四那年，有個人說我懂人心。我們約會、散步，平凡得像是呼吸。\n\n「我們分手吧。」我的腦子裡只剩下劇情。\n\n「你連我的臉都記不清」分手?故事就這樣草草了結。\n\n我清楚地記得，確認關係的那天，手中的劇本寫到男女主角論及婚嫁，但怎麼也想不起來，\n\n我和她是怎麼認識的。'
   ]);
   
@@ -1462,8 +1569,8 @@ function Chapter1ModelViewer() {
   const newNoteTexts = useRef([
     '阿，是放到這邊了，我就有印象我這幾天寫了靈感上去。\n\n幾天前的我早就預料到我現在的靈感匱乏了吧!我真是我自己的救世主。',
     '上頭有分別用不同字跡、不同顏色、不同規範，在同樣的位置寫滿了整個筆記。\n\n整個筆記，不分正面、背面，所有的空間被凌厲的內容填充得實實在在。\n\n彷彿作者根本就沒有意識到，這個筆記有其他內容存在。\n\n上面的混沌完全無法被理解，但可以確定有特定規律。',
-    '「幹!這是三小?」\n\n筆記瞬間脫手，文字符號的混亂誘導出純粹的生理恐懼\n\n「等等，我有印象...」\n\n拖動顫抖的手、再度撿起、打開外觀嶄新的筆記。\n\n方才看不清螢幕文字的雙眼，在左一塊綠右一塊紅的血、墨扭曲而成的漩渦中\n\n清晰的筆記內容展映在腦中\n\n「這是我?呵...呵..呵.呵呵呵呵呵」',
-    '壞掉的鈴聲從支離破碎的電話中響起。\n\n「快完成了」'
+    '「幹!這是三小?」\n\n筆記瞬間脫手，文字符號的混亂誘導出純粹的生理恐懼。\n\n「等等，我有印象...」\n\n拖動顫抖的手、再度撿起、打開外觀嶄新的筆記。\n\n方才看不清螢幕文字的雙眼，在左一塊綠右一塊紅的血、墨扭曲而成的漩渦中\n\n清晰的筆記內容展映在腦中。\n\n「這是我?呵...呵..呵.呵呵呵呵呵」',
+    '壞掉的鈴聲從支離破碎的電話中響起。\n\n「快完成了」。'
   ]);
   
   // 新笔记本文字显示状态
@@ -1697,6 +1804,104 @@ function Chapter1ModelViewer() {
     phoneRingAudioRef.current.loop = true; // 循环播放
     phoneRingAudioRef.current.volume = 0.7; // 设置音量
     
+    // 初始化电话砸墙声音频
+    phoneCrashAudioRef.current = new Audio(`${process.env.PUBLIC_URL || ''}/audio/sfx/電話砸牆聲.mp3`);
+    phoneCrashAudioRef.current.volume = 0.7; // 设置音量
+    
+    // 初始化槌墙声音效
+    wallHitAudioRef.current = new Audio(`${process.env.PUBLIC_URL || ''}/audio/sfx/槌牆聲.mp3`);
+    wallHitAudioRef.current.volume = 0.7; // 设置音量
+    wallHitAudioRef.current.preload = 'auto';
+    
+    // 初始化喷血声音效
+    bloodSprayAudioRef.current = new Audio(`${process.env.PUBLIC_URL || ''}/audio/sfx/噴血聲.mp3`);
+    bloodSprayAudioRef.current.volume = 0.7; // 设置音量
+    bloodSprayAudioRef.current.preload = 'auto';
+    
+    // 初始化笔记掉落声音效
+    noteDropAudioRef.current = new Audio(`${process.env.PUBLIC_URL || ''}/audio/sfx/筆記掉落聲.mp3`);
+    noteDropAudioRef.current.volume = 0.7; // 设置音量
+    noteDropAudioRef.current.preload = 'auto';
+    
+    // 初始化咖啡豆掉落声音效
+    coffeeBeanDropAudioRef.current = new Audio(`${process.env.PUBLIC_URL || ''}/audio/sfx/咖啡豆掉落聲.mp3`);
+    coffeeBeanDropAudioRef.current.volume = 0.7; // 设置音量
+    coffeeBeanDropAudioRef.current.preload = 'auto';
+    
+    // 初始化连续按笔声音效
+    continuousPenClickAudioRef.current = new Audio(`${process.env.PUBLIC_URL || ''}/audio/sfx/連續按筆聲.mp3`);
+    continuousPenClickAudioRef.current.volume = 0.7; // 设置音量
+    continuousPenClickAudioRef.current.preload = 'auto';
+    
+    // 初始化拳打肚子声音效
+    punchStomachAudioRef.current = new Audio(`${process.env.PUBLIC_URL || ''}/audio/sfx/拳打肚子聲.mp3`);
+    punchStomachAudioRef.current.volume = 1.0; // 设置音量（150%）
+    punchStomachAudioRef.current.preload = 'auto';
+    
+    // 初始化坏掉电话声音效
+    brokenPhoneAudioRef.current = new Audio(`${process.env.PUBLIC_URL || ''}/audio/sfx/壞掉電話聲.mp3`);
+    brokenPhoneAudioRef.current.volume = 0.7; // 设置音量
+    brokenPhoneAudioRef.current.preload = 'auto';
+    
+    // 初始化旋转建模声音效
+    rotateModelAudioRef.current = new Audio(`${process.env.PUBLIC_URL || ''}/audio/sfx/建模旋轉聲.mp3`);
+    rotateModelAudioRef.current.volume = 0.7; // 设置音量
+    rotateModelAudioRef.current.preload = 'auto';
+    
+    // 初始化水槽水滴声音效
+    sinkDripAudioRef.current = new Audio(`${process.env.PUBLIC_URL || ''}/audio/sfx/水槽水滴聲.mp3`);
+    sinkDripAudioRef.current.volume = 0.5; // 设置音量
+    sinkDripAudioRef.current.preload = 'auto';
+    
+    // 初始化第一章背景音乐
+    bgmAudioRef.current = new Audio(`${process.env.PUBLIC_URL || ''}/audio/bgm/第一章bgm.mp3`);
+    bgmAudioRef.current.volume = 0.5; // 设置音量
+    bgmAudioRef.current.loop = false; // 不自动循环，手动控制
+    bgmAudioRef.current.preload = 'auto'; // 预加载音频
+    
+    // 监听音频加载完成事件
+    bgmAudioRef.current.addEventListener('canplaythrough', () => {
+      // 音频加载完成后尝试播放
+      if (bgmAudioRef.current && bgmAudioRef.current.paused) {
+        bgmAudioRef.current.play().catch(err => {
+          console.warn('播放背景音乐失败（自动播放被阻止）:', err);
+          // 如果自动播放失败，等待用户交互后再播放
+        });
+      }
+    });
+    
+    // 监听音乐结束事件，结束后等待1秒再重新播放
+    bgmAudioRef.current.addEventListener('ended', () => {
+      setTimeout(() => {
+        if (bgmAudioRef.current) {
+          bgmAudioRef.current.play().catch(err => {
+            console.warn('播放背景音乐失败:', err);
+          });
+        }
+      }, 1000); // 等待1秒
+    });
+    
+    // 监听音频加载错误
+    bgmAudioRef.current.addEventListener('error', (e) => {
+      console.error('背景音乐加载失败:', e);
+    });
+    
+    // 尝试开始播放背景音乐（如果浏览器允许自动播放）
+    // 如果失败，会在用户第一次交互时通过其他事件触发播放
+    bgmAudioRef.current.play().catch(err => {
+      console.warn('播放背景音乐失败（可能需要用户交互）:', err);
+    });
+    
+    // 在打字机动画开始时尝试播放背景音乐
+    // 延迟一点时间，确保音频已加载
+    setTimeout(() => {
+      if (bgmAudioRef.current && bgmAudioRef.current.paused) {
+        bgmAudioRef.current.play().catch(err => {
+          console.warn('打字机动画开始时播放背景音乐失败:', err);
+        });
+      }
+    }, 500);
+    
     const tick = () => {
       if (!typingActiveRef.current) return;
       const lineIndex = typingLineIndexRef.current;
@@ -1710,6 +1915,13 @@ function Chapter1ModelViewer() {
       
       // 特殊处理：索引8（视觉效果句子）不显示文字，直接触发视觉效果
       if (lineIndex === 8 && charIndex === 0) {
+        // 播放喷血声音效
+        if (bloodSprayAudioRef.current) {
+          bloodSprayAudioRef.current.currentTime = 0;
+          bloodSprayAudioRef.current.play().catch(err => {
+            console.warn('播放喷血声失败:', err);
+          });
+        }
         // 触发视觉效果
         setShowVisualEffect(true);
         // 视觉效果持续3秒后，继续下一句
@@ -1726,6 +1938,16 @@ function Chapter1ModelViewer() {
       const fullLine = lines[lineIndex];
       const nextCharIndex = charIndex + 1;
       if (nextCharIndex <= fullLine.length) {
+        // 特殊处理：索引16（「轉瞬之間電話開始飛行並直直砸毀於牆壁」）播放到「並」字时播放音效
+        // 「並」字在这句话中的位置是第10个字符（索引9）
+        if (lineIndex === 16 && nextCharIndex === 10) {
+          if (phoneCrashAudioRef.current) {
+            phoneCrashAudioRef.current.play().catch(err => {
+              console.warn('播放电话砸墙声失败:', err);
+            });
+          }
+        }
+        
         setIntroVisibleLines(prev => {
           const copy = [...prev];
           copy[copy.length - 1] = fullLine.slice(0, nextCharIndex);
@@ -1757,28 +1979,27 @@ function Chapter1ModelViewer() {
               }, 1000); // 淡出动画时间：1秒
             }, 5000); // 停留时间：5秒
           } 
-          // 特殊处理：第7句（索引7）完成后，立即触发视觉效果，停留5秒，然后淡出，清空所有文字，跳过索引8直接到索引9
+          // 特殊处理：第7句（索引7）完成后，立即触发视觉效果，停留5秒，然后直接清空所有文字，跳过索引8直接到索引9（无淡出效果）
           else if (lineIndex === 7 && nextLine === 8) {
+            // 播放喷血声音效
+            if (bloodSprayAudioRef.current) {
+              bloodSprayAudioRef.current.currentTime = 0;
+              bloodSprayAudioRef.current.play().catch(err => {
+                console.warn('播放喷血声失败:', err);
+              });
+            }
             // 立即触发视觉效果（模糊和红色色块）
             setShowVisualEffect(true);
             // 停留5秒（在这5秒内，视觉效果持续显示）
             setTimeout(() => {
               // 关闭视觉效果
               setShowVisualEffect(false);
-              // 触发淡出动画（opacity变为0）
-              setIntroOpacity(0);
-              // 等待淡出动画完成（约1秒）
-              setTimeout(() => {
-                // 清空所有显示的文字
-                setIntroVisibleLines(['']);
-                // 重置透明度为1
-                setIntroOpacity(1);
-                // 跳过索引8（视觉效果句子），直接跳到索引9
-                typingLineIndexRef.current = 9;
-                typingCharIndexRef.current = 0;
-                setIntroVisibleLines(['']);
-                typingTimeoutRef.current = setTimeout(tick, charDelayMs);
-              }, 1000); // 淡出动画时间：1秒
+              // 直接清空所有显示的文字（不淡出）
+              setIntroVisibleLines(['']);
+              // 跳过索引8（视觉效果句子），直接跳到索引9
+              typingLineIndexRef.current = 9;
+              typingCharIndexRef.current = 0;
+              typingTimeoutRef.current = setTimeout(tick, charDelayMs);
             }, 5000); // 停留时间：5秒
           } 
           // 特殊处理：索引13（电话相关句子）完成后，播放电话铃声，停顿3秒，然后继续
@@ -1852,8 +2073,22 @@ function Chapter1ModelViewer() {
       if (!awaitingAnyKeyRef.current) return;
       if (!isSceneReadyRef.current || !isWarmupDoneRef.current) return;
       
+      // 尝试播放背景音乐（用户交互后应该可以播放）
+      if (bgmAudioRef.current && bgmAudioRef.current.paused) {
+        bgmAudioRef.current.play().catch(err => {
+          console.warn('用户交互后播放背景音乐失败:', err);
+        });
+      }
+      
       e.preventDefault();
       e.stopPropagation(); // 阻止事件继续传播
+      
+      // 尝试播放背景音乐（用户交互后应该可以播放）
+      if (bgmAudioRef.current && bgmAudioRef.current.paused) {
+        bgmAudioRef.current.play().catch(err => {
+          console.warn('用户交互后播放背景音乐失败:', err);
+        });
+      }
       
       // 先更新 ref，确保其他监听器能立即看到最新状态
       awaitingAnyKeyRef.current = false;
@@ -1905,8 +2140,118 @@ function Chapter1ModelViewer() {
         phoneRingAudioRef.current.currentTime = 0;
         phoneRingAudioRef.current = null;
       }
+      if (phoneCrashAudioRef.current) {
+        phoneCrashAudioRef.current.pause();
+        phoneCrashAudioRef.current.currentTime = 0;
+        phoneCrashAudioRef.current = null;
+      }
+      if (wallHitAudioRef.current) {
+        wallHitAudioRef.current.pause();
+        wallHitAudioRef.current.currentTime = 0;
+        wallHitAudioRef.current = null;
+      }
+      if (bloodSprayAudioRef.current) {
+        bloodSprayAudioRef.current.pause();
+        bloodSprayAudioRef.current.currentTime = 0;
+        bloodSprayAudioRef.current = null;
+      }
+      if (noteDropAudioRef.current) {
+        noteDropAudioRef.current.pause();
+        noteDropAudioRef.current.currentTime = 0;
+        noteDropAudioRef.current = null;
+      }
+      if (coffeeBeanDropAudioRef.current) {
+        coffeeBeanDropAudioRef.current.pause();
+        coffeeBeanDropAudioRef.current.currentTime = 0;
+        coffeeBeanDropAudioRef.current = null;
+      }
+      if (continuousPenClickAudioRef.current) {
+        continuousPenClickAudioRef.current.pause();
+        continuousPenClickAudioRef.current.currentTime = 0;
+        continuousPenClickAudioRef.current = null;
+      }
+      if (punchStomachAudioRef.current) {
+        punchStomachAudioRef.current.pause();
+        punchStomachAudioRef.current.currentTime = 0;
+        punchStomachAudioRef.current = null;
+      }
+      if (brokenPhoneAudioRef.current) {
+        brokenPhoneAudioRef.current.pause();
+        brokenPhoneAudioRef.current.currentTime = 0;
+        brokenPhoneAudioRef.current = null;
+      }
+      if (rotateModelAudioRef.current) {
+        rotateModelAudioRef.current.pause();
+        rotateModelAudioRef.current.currentTime = 0;
+        rotateModelAudioRef.current = null;
+      }
+      if (sinkDripAudioRef.current) {
+        sinkDripAudioRef.current.pause();
+        sinkDripAudioRef.current.currentTime = 0;
+        sinkDripAudioRef.current = null;
+      }
+      if (sinkDripTimerRef.current) {
+        clearInterval(sinkDripTimerRef.current);
+        sinkDripTimerRef.current = null;
+      }
+      if (bgmAudioRef.current) {
+        bgmAudioRef.current.pause();
+        bgmAudioRef.current.currentTime = 0;
+        bgmAudioRef.current = null;
+      }
     };
   }, []);
+  
+  // 监听水槽放大状态，播放水滴声
+  useEffect(() => {
+    // 只有在建模画面已显示时才播放水滴声，避免开场动画时误播放
+    if (!canShowModel) {
+      // 如果建模画面未显示，确保停止定时器
+      if (sinkDripTimerRef.current) {
+        clearInterval(sinkDripTimerRef.current);
+        sinkDripTimerRef.current = null;
+      }
+      return;
+    }
+    
+    const isSinkZoomed = isZoomed && selectedObjectName === 'sink';
+    
+    if (isSinkZoomed) {
+      // 水槽放大时，立即播放一次，然后每隔3秒播放一次
+      if (sinkDripAudioRef.current) {
+        sinkDripAudioRef.current.currentTime = 0;
+        sinkDripAudioRef.current.play().catch(err => {
+          console.warn('播放水槽水滴声失败:', err);
+        });
+      }
+      
+      // 设置定时器，每隔3秒播放一次
+      sinkDripTimerRef.current = setInterval(() => {
+        if (sinkDripAudioRef.current) {
+          sinkDripAudioRef.current.currentTime = 0;
+          sinkDripAudioRef.current.play().catch(err => {
+            console.warn('播放水槽水滴声失败:', err);
+          });
+        }
+      }, 3000); // 3秒 = 3000毫秒
+    } else {
+      // 水槽缩小时，只停止定时器，让当前正在播放的音效继续播放完
+      if (sinkDripTimerRef.current) {
+        clearInterval(sinkDripTimerRef.current);
+        sinkDripTimerRef.current = null;
+      }
+      // 不立即停止音频，让它自然播放完
+      // 音频会在播放完成后自动停止
+    }
+    
+    // 清理函数
+    return () => {
+      if (sinkDripTimerRef.current) {
+        clearInterval(sinkDripTimerRef.current);
+        sinkDripTimerRef.current = null;
+      }
+    };
+  }, [isZoomed, selectedObjectName, canShowModel]);
   
   // 新字出現時自動滾動至底部，避免超出螢幕
   useEffect(() => {
@@ -2033,95 +2378,119 @@ useEffect(() => {
         return;
       }
       
-      if (interactiveObjects.length === 0 || !isWarmupDoneRef.current) return;
-      if (!isSceneReady) return;
-      
-      // 开场未完成或仍在等待时，阻止场景交互
-      // 使用 ref 获取最新值，避免闭包问题
-      if (!canShowModelRef.current || awaitingAnyKeyRef.current) {
-        return;
-      }
-      
-      // 检查是否同时按下左右键（退出机制）
-      // 如果检测到组合键或游戏交互被阻止，则不执行游戏操作
+      // 跟踪按下的键和时间（用于检测组合键）
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        const currentKey = e.key;
+        pressedKeysRef.current.add(currentKey);
+        keyPressTimesRef.current[currentKey] = Date.now();
+        
+        // 清除之前延迟执行的单个键操作（如果另一个键也按下了）
+        if (pendingKeyActionRef.current) {
+          clearTimeout(pendingKeyActionRef.current);
+          pendingKeyActionRef.current = null;
+        }
+        
+        // 检查是否同时按下左右键（在150ms内）
+        if (pressedKeysRef.current.has('ArrowLeft') && pressedKeysRef.current.has('ArrowRight')) {
+          const leftTime = keyPressTimesRef.current['ArrowLeft'];
+          const rightTime = keyPressTimesRef.current['ArrowRight'];
+          
+          if (leftTime && rightTime && Math.abs(leftTime - rightTime) <= 150) {
+            // 检测到组合键，不阻止事件传播，让 useLongPressEnter hook 处理
+            return;
+          }
+        }
+        
+        // 对于单个左右键，延迟150ms执行，以便检测是否有组合键
+        // 如果在这150ms内检测到组合键，则取消执行
+        // 先不阻止事件传播，让 useLongPressEnter 可以检测组合键
+        // 延迟执行单个键的处理逻辑
+        pendingKeyActionRef.current = setTimeout(() => {
+          // 再次检查是否有组合键（防止在延迟期间按下另一个键）
+          if (pressedKeysRef.current.has('ArrowLeft') && pressedKeysRef.current.has('ArrowRight')) {
+            const leftTime = keyPressTimesRef.current['ArrowLeft'];
+            const rightTime = keyPressTimesRef.current['ArrowRight'];
+            if (leftTime && rightTime && Math.abs(leftTime - rightTime) <= 200) {
+              // 检测到组合键，不执行单个键操作
+              pendingKeyActionRef.current = null;
+              return;
+            }
+          }
+          
+            // 检查是否被游戏交互阻止
       if (window.gameInteractionBlocked || window.combinationDetected) {
+              pendingKeyActionRef.current = null;
         return;
       }
       
-      // 阻止事件继续传播，确保其他监听器不会处理
-      e.stopPropagation();
-      
-      if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        // 向左切换（前一个物件）
+          // 执行单个键的操作
+          if (interactiveObjects.length === 0 || !isWarmupDoneRef.current) {
+            pendingKeyActionRef.current = null;
+            return;
+          }
+          if (!isSceneReady) {
+            pendingKeyActionRef.current = null;
+            return;
+          }
+          if (!canShowModelRef.current || awaitingAnyKeyRef.current) {
+            pendingKeyActionRef.current = null;
+            return;
+          }
+          
+          // 执行单个键操作
+          // 如果当前没有物件被放大（交互物件选择模式），播放旋转建模声
+          if (!isZoomed) {
+            if (rotateModelAudioRef.current) {
+              rotateModelAudioRef.current.currentTime = 0;
+              rotateModelAudioRef.current.play().catch(err => {
+                console.warn('播放旋转建模声失败:', err);
+              });
+            }
+          }
+          
+          if (currentKey === 'ArrowLeft') {
         setSelectedObjectIndex((prevIndex) => {
           const newIndex = prevIndex === 0 ? interactiveObjects.length - 1 : prevIndex - 1;
           const newObjectName = interactiveObjects[newIndex].name;
           setSelectedObjectName(newObjectName);
-          setIsZoomed(false); // 切换物件时重置放大状态
+              setIsZoomed(false);
           return newIndex;
         });
-      } else if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        // 向右切换（后一个物件）
+          } else if (currentKey === 'ArrowRight') {
         setSelectedObjectIndex((prevIndex) => {
           const newIndex = prevIndex === interactiveObjects.length - 1 ? 0 : prevIndex + 1;
           const newObjectName = interactiveObjects[newIndex].name;
           setSelectedObjectName(newObjectName);
-          setIsZoomed(false); // 切换物件时重置放大状态
+              setIsZoomed(false);
           return newIndex;
         });
-      } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        // 如果水槽、摩卡壺、旧笔记本或新笔记本放大，处理文字分段
-        // 在调用 goNext 之前先检查是否需要播放音效（进入/退出回忆段）
-        if (isZoomed && selectedObjectName) {
-          let currentSegment = 0;
-          let nextSegment = 0;
-          const segments = flashbackSegmentMap[selectedObjectName] || [];
-          
-          // 获取当前段索引
-          if (selectedObjectName === 'sink') {
-            currentSegment = sinkCurrentSegmentRef.current;
-            nextSegment = currentSegment + 1;
-          } else if (selectedObjectName === 'mokaPot') {
-            currentSegment = mokaPotCurrentSegmentRef.current;
-            nextSegment = currentSegment + 1;
-          } else if (selectedObjectName === 'oldNote') {
-            currentSegment = oldNoteCurrentSegmentRef.current;
-            nextSegment = currentSegment + 1;
-          } else if (selectedObjectName === 'newNote') {
-            currentSegment = newNoteCurrentSegmentRef.current;
-            nextSegment = currentSegment + 1;
           }
           
-          const isCurrentSegmentFlashback = segments.includes(currentSegment);
-          const isNextSegmentFlashback = segments.includes(nextSegment);
-          
-          // 如果即将进入或退出回忆段，立即播放音效
-          if ((!isCurrentSegmentFlashback && isNextSegmentFlashback) || 
-              (isCurrentSegmentFlashback && !isNextSegmentFlashback)) {
-            playPageFlipSound();
-          }
-          // 如果当前是回忆段，且是最后一段（即将缩小建模），播放音效
-          else if (isCurrentSegmentFlashback) {
-            let totalSegments = 0;
-            if (selectedObjectName === 'sink') {
-              totalSegments = sinkTexts.current.length;
-            } else if (selectedObjectName === 'mokaPot') {
-              totalSegments = mokaPotTexts.current.length;
-            } else if (selectedObjectName === 'oldNote') {
-              totalSegments = oldNoteTexts.current.length;
-            } else if (selectedObjectName === 'newNote') {
-              totalSegments = newNoteTexts.current.length;
-            }
-            
-            if (nextSegment >= totalSegments) {
-              playPageFlipSound();
-            }
-          }
+          pendingKeyActionRef.current = null;
+        }, 150);
+        
+        // 不阻止事件传播，让 useLongPressEnter 可以处理
+        return;
+      }
+      
+      // 处理下方向键（不受组合键影响）
+      if (e.key === 'ArrowDown') {
+        if (interactiveObjects.length === 0 || !isWarmupDoneRef.current) return;
+        if (!isSceneReady) return;
+        if (!canShowModelRef.current || awaitingAnyKeyRef.current) {
+          return;
+        }
+        if (window.gameInteractionBlocked || window.combinationDetected) {
+          return;
         }
         
+        // 阻止事件继续传播，确保其他监听器不会处理
+        e.stopPropagation();
+        e.preventDefault();
+        
+        // 处理下方向键（e.key 已经是 'ArrowDown'）
+        // 如果水槽、摩卡壺、旧笔记本或新笔记本放大，处理文字分段
+        // 音效播放逻辑在 goNext 函数中，只有在真正切换段落时才播放
         if (isZoomed && selectedObjectName === 'sink') {
           goNextSinkSegment();
         } else if (isZoomed && selectedObjectName === 'mokaPot') {
@@ -2145,10 +2514,29 @@ useEffect(() => {
       }
     };
     
+    // 处理键释放事件，清理按下的键和取消延迟操作
+    const handleKeyUp = (e) => {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        pressedKeysRef.current.delete(e.key);
+        delete keyPressTimesRef.current[e.key];
+        
+        // 如果键释放时还有延迟操作，取消它（因为可能是组合键检测失败的情况）
+        // 但不完全取消，因为用户可能快速释放后再次按下
+        // 实际应该在延迟期间检查组合键状态
+      }
+    };
+    
     // 使用捕获阶段，确保此监听器在其他监听器之前执行
     window.addEventListener('keydown', handleKeyDown, true);
+    window.addEventListener('keyup', handleKeyUp, true);
     return () => {
       window.removeEventListener('keydown', handleKeyDown, true);
+      window.removeEventListener('keyup', handleKeyUp, true);
+      // 清理延迟操作
+      if (pendingKeyActionRef.current) {
+        clearTimeout(pendingKeyActionRef.current);
+        pendingKeyActionRef.current = null;
+      }
     };
   }, [interactiveObjects, selectedObjectName, isZoomed, goNextSinkSegment, goNextMokaPotSegment, goNextOldNoteSegment, goNextNewNoteSegment, isSceneReady, playPageFlipSound]);
   
@@ -2160,11 +2548,154 @@ useEffect(() => {
     
     let charIndex = 0;
     const textLength = text.length;
+    const wallHitPlayedRef = { current: false }; // 用于跟踪是否已播放槌墙声
+    const continuousPenClickPlayedRef = { current: false }; // 用于跟踪是否已播放连续按笔声
+    const continuousPenClickAudioInstancesRef = { current: [] }; // 用于跟踪所有连续按笔声的音频实例
+    const continuousPenClickStoppedRef = { current: false }; // 用于标记是否已停止连续按笔声
+    const punchStomachPlayedRef = { current: false }; // 用于跟踪是否已播放拳打肚子声
+    
+    // 找到「咚..咚..咚..咚..」的位置
+    const targetText = '咚..咚..咚..咚..';
+    const targetIndex = text.indexOf(targetText);
+    
+    // 找到「卻因為室友不斷按壓的筆聲」的「因」字的位置
+    const penClickTargetText = '卻因為室友不斷按壓的筆聲';
+    const penClickTargetIndex = text.indexOf(penClickTargetText);
+    const penClickTargetCharIndex = penClickTargetIndex !== -1 ? penClickTargetIndex + 2 : -1; // 「因」字在「卻因為室友不斷按壓的筆聲」中的位置是索引2
+    
+    // 找到「我一拳灌在室友肚子」的「我」字的位置
+    const punchStomachTargetText = '我一拳灌在室友肚子';
+    const punchStomachTargetIndex = text.indexOf(punchStomachTargetText);
+    const punchStomachTargetCharIndex = punchStomachTargetIndex !== -1 ? punchStomachTargetIndex + 0 : -1; // 「我」字在「我一拳灌在室友肚子」中的位置是索引0
     
     const type = () => {
       if (charIndex < textLength) {
-        setSinkDisplayedText(text.substring(0, charIndex + 1));
+        const displayedText = text.substring(0, charIndex + 1);
+        setSinkDisplayedText(displayedText);
         charIndex++;
+        
+        // 检查是否显示到「我一拳灌在室友肚子」的「我」字并播放音效
+        // charIndex 在递增后表示已显示的字符数，所以需要检查 charIndex - 1 或 charIndex === targetIndex + 1
+        if (punchStomachTargetCharIndex !== -1 && charIndex === punchStomachTargetCharIndex + 1 && !punchStomachPlayedRef.current) {
+          // 如果连续按笔声还在播放，立即停止所有实例
+          // 先设置停止标志，这样即使 ended 事件触发，也不会继续播放
+          continuousPenClickStoppedRef.current = true;
+          
+          // 停止所有正在播放的连续按笔声实例
+          const instancesToStop = [...continuousPenClickAudioInstancesRef.current]; // 创建副本以避免在遍历时修改数组
+          instancesToStop.forEach(audio => {
+            if (audio && !audio.paused) {
+              try {
+                // 立即停止音频并重置
+                audio.pause();
+                audio.currentTime = 0;
+                // 重新加载音频以移除所有事件监听器
+                audio.load();
+              } catch (err) {
+                // 如果 load() 失败，至少确保暂停和重置
+                try {
+                  audio.pause();
+                  audio.currentTime = 0;
+                } catch (e) {
+                  console.warn('停止连续按笔声失败:', e);
+                }
+              }
+            }
+          });
+          continuousPenClickAudioInstancesRef.current = []; // 清空数组
+          
+          if (punchStomachAudioRef.current) {
+            punchStomachAudioRef.current.currentTime = 0;
+            punchStomachAudioRef.current.play().catch(err => {
+              console.warn('播放拳打肚子声失败:', err);
+            });
+            punchStomachPlayedRef.current = true; // 标记已播放
+          }
+        }
+        
+        // 检查是否显示到「卻因為室友不斷按壓的筆聲」的「因」字并播放音效（重复播放两次）
+        if (penClickTargetCharIndex !== -1 && charIndex === penClickTargetCharIndex && !continuousPenClickPlayedRef.current) {
+          if (continuousPenClickAudioRef.current) {
+            let playCount = 0;
+            const maxPlayCount = 2;
+            
+            const playPenClickSound = () => {
+              // 检查是否已被停止
+              if (continuousPenClickStoppedRef.current) {
+                return; // 如果已停止，不再播放
+              }
+              
+              if (playCount < maxPlayCount) {
+                // 创建新的音频实例以避免冲突
+                const audio = continuousPenClickAudioRef.current.cloneNode();
+                audio.volume = continuousPenClickAudioRef.current.volume;
+                audio.currentTime = 0;
+                
+                // 将音频实例添加到跟踪数组中
+                continuousPenClickAudioInstancesRef.current.push(audio);
+                
+                // 监听播放结束事件，播放下一次
+                audio.addEventListener('ended', () => {
+                  // 检查是否已被停止
+                  if (continuousPenClickStoppedRef.current) {
+                    return; // 如果已停止，不再播放
+                  }
+                  
+                  // 从跟踪数组中移除
+                  const index = continuousPenClickAudioInstancesRef.current.indexOf(audio);
+                  if (index > -1) {
+                    continuousPenClickAudioInstancesRef.current.splice(index, 1);
+                  }
+                  
+                  playCount++;
+                  if (playCount < maxPlayCount && !continuousPenClickStoppedRef.current) {
+                    playPenClickSound();
+                  }
+                });
+                
+                audio.play().catch(err => {
+                  console.warn('播放连续按笔声失败:', err);
+                  
+                  // 检查是否已被停止
+                  if (continuousPenClickStoppedRef.current) {
+                    return; // 如果已停止，不再播放
+                  }
+                  
+                  // 从跟踪数组中移除
+                  const index = continuousPenClickAudioInstancesRef.current.indexOf(audio);
+                  if (index > -1) {
+                    continuousPenClickAudioInstancesRef.current.splice(index, 1);
+                  }
+                  
+                  playCount++;
+                  if (playCount < maxPlayCount && !continuousPenClickStoppedRef.current) {
+                    playPenClickSound();
+                  }
+                });
+              }
+            };
+            
+            // 开始播放
+            playPenClickSound();
+            continuousPenClickPlayedRef.current = true; // 标记已播放
+          }
+        }
+        
+        // 检查是否接近「咚..咚..咚..咚..」（提前约0.2秒播放，约5个字符）
+        // 普通字符40ms，0.2秒 = 200ms，约5个字符
+        if (targetIndex !== -1 && !wallHitPlayedRef.current) {
+          const charsBeforeTarget = targetIndex - charIndex;
+          // 如果距离目标文字还有约5个字符（提前0.2秒），开始播放音效
+          if (charsBeforeTarget <= 5 && charsBeforeTarget >= 0) {
+            if (wallHitAudioRef.current) {
+              wallHitAudioRef.current.currentTime = 0;
+              wallHitAudioRef.current.play().catch(err => {
+                console.warn('播放槌墙声失败:', err);
+              });
+              wallHitPlayedRef.current = true; // 标记已播放
+            }
+          }
+        }
         
         // 标点符号停顿400ms，普通字符40ms
         const punctuationMarks = ['，', '。', '！', '？', '；', '：', '、', '…', '─', '—', '～', '‧'];
@@ -2197,9 +2728,10 @@ useEffect(() => {
   
   // 水槽文字下一段
   const goNextSinkSegment = useCallback(() => {
-    // 如果正在打字，不允许继续，必须等文字全部显示完（使用 ref 获取最新值）
+    // 如果正在打字，先跳过打字机动画，然后继续
     if (sinkIsTypingRef.current) {
-      return;
+      skipSinkTypewriter();
+      // 跳过动画后，继续执行下面的逻辑
     }
     
     // 检查是否还有下一段（使用 ref 获取最新值，避免闭包问题）
@@ -2241,7 +2773,7 @@ useEffect(() => {
       // 直接缩小建模，让资讯框立即隐藏
       setIsZoomed(false);
     }
-  }, [playPageFlipSound]);
+  }, [playPageFlipSound, skipNewNoteTypewriter]);
   const startMokaPotTypewriter = useCallback((text) => {
     setMokaPotDisplayedText('');
     setMokaPotIsTyping(true);
@@ -2249,11 +2781,29 @@ useEffect(() => {
     
     let charIndex = 0;
     const textLength = text.length;
+    const coffeeBeanDropPlayedRef = { current: false }; // 用于跟踪是否已播放咖啡豆掉落声
+    
+    // 找到「摩卡壺?別鬧了，你吃咖啡豆，乖」的「鬧」字的位置
+    const targetText = '摩卡壺?別鬧了，你吃咖啡豆，乖';
+    const targetIndex = text.indexOf(targetText);
+    const targetCharIndex = targetIndex !== -1 ? targetIndex + 4 : -1; // 「鬧」字在「摩卡壺?別鬧了，你吃咖啡豆，乖」中的位置是索引4
     
     const type = () => {
       if (charIndex < textLength) {
-        setMokaPotDisplayedText(text.substring(0, charIndex + 1));
+        const displayedText = text.substring(0, charIndex + 1);
+        setMokaPotDisplayedText(displayedText);
         charIndex++;
+        
+        // 检查是否显示到「摩卡壺?別鬧了，你吃咖啡豆，乖」的「鬧」字并播放音效
+        if (targetCharIndex !== -1 && charIndex === targetCharIndex && !coffeeBeanDropPlayedRef.current) {
+          if (coffeeBeanDropAudioRef.current) {
+            coffeeBeanDropAudioRef.current.currentTime = 0;
+            coffeeBeanDropAudioRef.current.play().catch(err => {
+              console.warn('播放咖啡豆掉落声失败:', err);
+            });
+            coffeeBeanDropPlayedRef.current = true; // 标记已播放
+          }
+        }
         
         // 标点符号停顿400ms，普通字符40ms
         const punctuationMarks = ['，', '。', '！', '？', '；', '：', '、', '…', '─', '—', '～', '‧'];
@@ -2330,7 +2880,7 @@ useEffect(() => {
       // 直接缩小建模，让资讯框立即隐藏
       setIsZoomed(false);
     }
-  }, [playPageFlipSound]);
+  }, [playPageFlipSound, skipMokaPotTypewriter]);
   
   // 旧笔记本打字机动画
   const startOldNoteTypewriter = useCallback((text) => {
@@ -2377,9 +2927,10 @@ useEffect(() => {
   
   // 旧笔记本文字下一段
   const goNextOldNoteSegment = useCallback(() => {
-    // 如果正在打字，不允许继续，必须等文字全部显示完（使用 ref 获取最新值）
+    // 如果正在打字，先跳过打字机动画，然后继续
     if (oldNoteIsTypingRef.current) {
-      return;
+      skipOldNoteTypewriter();
+      // 跳过动画后，继续执行下面的逻辑
     }
     
     // 检查是否还有下一段（使用 ref 获取最新值，避免闭包问题）
@@ -2421,7 +2972,7 @@ useEffect(() => {
       // 直接缩小建模，让资讯框立即隐藏
       setIsZoomed(false);
     }
-  }, [playPageFlipSound]);
+  }, [playPageFlipSound, skipOldNoteTypewriter]);
   
   // 新笔记本打字机动画
   const startNewNoteTypewriter = useCallback((text) => {
@@ -2431,11 +2982,68 @@ useEffect(() => {
     
     let charIndex = 0;
     const textLength = text.length;
+    const noteDropPlayedRef = { current: false }; // 用于跟踪是否已播放笔记掉落声（用于「筆記瞬間脫手」）
+    const noteDropPlayedRef2 = { current: false }; // 用于跟踪是否已播放笔记掉落声（用于「「幹!這是三小?」」）
+    const brokenPhonePlayedRef = { current: false }; // 用于跟踪是否已播放坏掉电话声
+    
+    // 找到「筆記瞬間脫手」的「筆」字的位置
+    const targetText = '筆記瞬間脫手';
+    const targetIndex = text.indexOf(targetText);
+    // 提前0.6秒播放，约15-16个字符（普通字符40ms，0.6秒=600ms，约15个字符）
+    const targetCharIndex = targetIndex !== -1 ? targetIndex - 16 : -1; // 在「筆」字之前16个字符的位置播放
+    
+    // 找到「「幹!這是三小?」」的「小」字的位置
+    const targetText2 = '「幹!這是三小?」';
+    const targetIndex2 = text.indexOf(targetText2);
+    const targetCharIndex2 = targetIndex2 !== -1 ? targetIndex2 + 6 : -1; // 「小」字在「「幹!這是三小?」」中的位置是索引6
+    
+    // 找到「壞掉的鈴聲從支離破碎的電話中響起。」的「聲」字的位置
+    const brokenPhoneTargetText = '壞掉的鈴聲從支離破碎的電話中響起。';
+    const brokenPhoneTargetIndex = text.indexOf(brokenPhoneTargetText);
+    const brokenPhoneTargetCharIndex = brokenPhoneTargetIndex !== -1 ? brokenPhoneTargetIndex + 3 : -1; // 「聲」字在「壞掉的鈴聲從支離破碎的電話中響起。」中的位置是索引3
     
     const type = () => {
       if (charIndex < textLength) {
-        setNewNoteDisplayedText(text.substring(0, charIndex + 1));
+        const displayedText = text.substring(0, charIndex + 1);
+        setNewNoteDisplayedText(displayedText);
         charIndex++;
+        
+        // 检查是否显示到「壞掉的鈴聲從支離破碎的電話中響起。」的「聲」字并播放音效
+        // charIndex 在递增后表示已显示的字符数，所以需要检查 charIndex === targetIndex + 1
+        if (brokenPhoneTargetCharIndex !== -1 && charIndex === brokenPhoneTargetCharIndex + 1 && !brokenPhonePlayedRef.current) {
+          if (brokenPhoneAudioRef.current) {
+            brokenPhoneAudioRef.current.currentTime = 0;
+            brokenPhoneAudioRef.current.play().catch(err => {
+              console.warn('播放坏掉电话声失败:', err);
+            });
+            brokenPhonePlayedRef.current = true; // 标记已播放
+          }
+        }
+        
+        // 检查是否显示到「「幹!這是三小?」」的「小」字并播放音效
+        if (targetCharIndex2 !== -1 && charIndex === targetCharIndex2 && !noteDropPlayedRef2.current) {
+          if (noteDropAudioRef.current) {
+            noteDropAudioRef.current.currentTime = 0;
+            noteDropAudioRef.current.play().catch(err => {
+              console.warn('播放笔记掉落声失败:', err);
+            });
+            noteDropPlayedRef2.current = true; // 标记已播放
+          }
+        }
+        
+        // 检查是否显示到「筆記瞬間脫手」的「筆」字并播放音效
+        if (targetIndex !== -1 && !noteDropPlayedRef.current) {
+          // 检查是否到达目标位置（在「筆」字之前16个字符）
+          if (charIndex >= targetCharIndex && targetCharIndex >= 0) {
+            if (noteDropAudioRef.current) {
+              noteDropAudioRef.current.currentTime = 0;
+              noteDropAudioRef.current.play().catch(err => {
+                console.warn('播放笔记掉落声失败:', err);
+              });
+              noteDropPlayedRef.current = true; // 标记已播放
+            }
+          }
+        }
         
         // 标点符号停顿400ms，普通字符40ms
         const punctuationMarks = ['，', '。', '！', '？', '；', '：', '、', '…', '─', '—', '～', '‧'];
@@ -2468,9 +3076,10 @@ useEffect(() => {
   
   // 新笔记本文字下一段
   const goNextNewNoteSegment = useCallback(() => {
-    // 如果正在打字，不允许继续，必须等文字全部显示完（使用 ref 获取最新值）
+    // 如果正在打字，先跳过打字机动画，然后继续
     if (newNoteIsTypingRef.current) {
-      return;
+      skipNewNoteTypewriter();
+      // 跳过动画后，继续执行下面的逻辑
     }
     
     // 检查是否还有下一段（使用 ref 获取最新值，避免闭包问题）
@@ -2512,7 +3121,7 @@ useEffect(() => {
       // 直接缩小建模，让资讯框立即隐藏
       setIsZoomed(false);
     }
-  }, []);
+  }, [playPageFlipSound, skipNewNoteTypewriter]);
   
   // 当水槽被放大时，初始化打字机动画
   useEffect(() => {
@@ -2956,7 +3565,8 @@ useEffect(() => {
                     whiteSpace: 'pre-wrap',
                     wordBreak: 'break-word',
                     transform: showVisualEffect ? `rotate(${Math.sin(idx * 0.5) * 2}deg) skewX(${Math.cos(idx * 0.3) * 1}deg)` : 'none',
-                    transition: showVisualEffect ? 'transform 0.1s linear' : 'none'
+                    transition: showVisualEffect ? 'transform 0.1s linear' : 'none',
+                    animation: !showVisualEffect && line ? 'introFadeIn 0.6s ease-out forwards' : 'none'
                   }}
                 >
                   {line}

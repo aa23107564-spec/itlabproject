@@ -7,6 +7,7 @@ import '../styles/keyboardIntro.css';
  */
 function KeyboardIntroPage({ onSkip, chapter = 3 }) {
   const [isFadingOut, setIsFadingOut] = useState(false);
+  const [imageLoaded, setImageLoaded] = useState(false);
 
   // 根據章節決定顯示的內容
   const getChapterContent = () => {
@@ -64,7 +65,7 @@ function KeyboardIntroPage({ onSkip, chapter = 3 }) {
   return (
     <div className={`keyboard-intro-page chapter-${chapter}`}>
       {/* 內容區域 - 吸入效果 */}
-      <div className={`keyboard-intro-content ${isFadingOut ? 'suck-in-content' : ''}`}>
+      <div className={`keyboard-intro-content ${isFadingOut ? 'suck-in-content' : ''} ${imageLoaded ? 'content-visible' : 'content-hidden'}`}>
         {/* 鍵盤圖標和對應文字 */}
         <div className="keyboard-with-labels">
           {/* 左箭頭 - 對應左邊按鍵 */}
@@ -120,6 +121,7 @@ function KeyboardIntroPage({ onSkip, chapter = 3 }) {
             src={`${process.env.PUBLIC_URL || ''}/images/icons/鍵盤.png`}
             alt="Keyboard Icon" 
             className="keyboard-icon"
+            onLoad={() => setImageLoaded(true)}
           />
         </div>
         

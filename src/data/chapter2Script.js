@@ -169,14 +169,16 @@ const chapter2Script = {
       type: 'dialogue',
       speaker: 'editor',
       text: '其實你現在不是也很清楚嗎？\n知道自己正在咖啡廳，和你的編輯<slow>討論著下本書的事......</slow>',
-      next: 'branch-a-11'
+      next: 'branch-a-11',
+      crowdChat: true // 播放人群交谈音效
     },
     {
       id: 'branch-a-11',
       type: 'dialogue',
       speaker: 'editor',
       text: '難道這些事不從別人的嘴裡聽到，\n你..<slow>.就沒辦法知道嗎？</slow>',
-      next: 'branch-a-12'
+      next: 'branch-a-12',
+      crowdChat: true // 播放人群交谈音效
     },
     {
       id: 'branch-a-12',
@@ -299,7 +301,7 @@ const chapter2Script = {
       id: 'branch-b-4',
       type: 'dialogue',
       speaker: 'protagonist',
-      text: '這樣的我<slow>...<strong>難道不能</slow>被稱作是一個『普通人』嗎？</strong>',
+      text: '這樣的我<slow>...<strong>難道不能</slow>被稱作是一個「普通人」嗎？</strong>',
       next: 'branch-b-5'
     },
     {

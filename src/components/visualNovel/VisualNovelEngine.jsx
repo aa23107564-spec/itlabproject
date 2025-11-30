@@ -35,6 +35,10 @@ const VisualNovelEngine = ({ script, onComplete, isEndingBA = false, hideParticl
 
   // Refs
   const typewriterTimer = useRef(null);
+  const protagonistAudioRef = useRef(null); // 主角说话音效
+  const editorAudioRef = useRef(null); // 编辑说话音效
+  const drinkCoffeeAudioRef = useRef(null); // 啜饮音效
+  const crowdChatAudioRef = useRef(null); // 人群交谈音效
   const currentDialogues = script[currentBranch] || [];
   const currentNode = currentDialogues[currentIndex];
 
@@ -58,9 +62,61 @@ const VisualNovelEngine = ({ script, onComplete, isEndingBA = false, hideParticl
   }, []); // 空依賴數組，確保只生成一次
 
   /**
+   * 初始化音效
+   */
+  useEffect(() => {
+    // 初始化主角说话音效（短音效，不循环）
+    protagonistAudioRef.current = new Audio(`${process.env.PUBLIC_URL || ''}/audio/sfx/主角說話.mp3`);
+    protagonistAudioRef.current.volume = 0.3;
+    protagonistAudioRef.current.loop = false;
+    protagonistAudioRef.current.preload = 'auto';
+    
+    // 初始化编辑说话音效（短音效，不循环）
+    editorAudioRef.current = new Audio(`${process.env.PUBLIC_URL || ''}/audio/sfx/編輯說話.mp3`);
+    editorAudioRef.current.volume = 0.3;
+    editorAudioRef.current.loop = false;
+    editorAudioRef.current.preload = 'auto';
+    
+    // 初始化啜饮音效
+    drinkCoffeeAudioRef.current = new Audio(`${process.env.PUBLIC_URL || ''}/audio/sfx/啜飲音效.mp3`);
+    drinkCoffeeAudioRef.current.volume = 0.5;
+    drinkCoffeeAudioRef.current.preload = 'auto';
+    
+    // 初始化人群交谈音效
+    crowdChatAudioRef.current = new Audio(`${process.env.PUBLIC_URL || ''}/audio/sfx/人群交談音效.mp3`);
+    crowdChatAudioRef.current.volume = 0.3;
+    crowdChatAudioRef.current.loop = true;
+    crowdChatAudioRef.current.preload = 'auto';
+    
+    return () => {
+      // 清理音效
+      if (protagonistAudioRef.current) {
+        protagonistAudioRef.current.pause();
+        protagonistAudioRef.current.currentTime = 0;
+        protagonistAudioRef.current = null;
+      }
+      if (editorAudioRef.current) {
+        editorAudioRef.current.pause();
+        editorAudioRef.current.currentTime = 0;
+        editorAudioRef.current = null;
+      }
+      if (drinkCoffeeAudioRef.current) {
+        drinkCoffeeAudioRef.current.pause();
+        drinkCoffeeAudioRef.current.currentTime = 0;
+        drinkCoffeeAudioRef.current = null;
+      }
+      if (crowdChatAudioRef.current) {
+        crowdChatAudioRef.current.pause();
+        crowdChatAudioRef.current.currentTime = 0;
+        crowdChatAudioRef.current = null;
+      }
+    };
+  }, []);
+  
+  /**
    * 打字機效果（在逗號處停頓0.4秒，支持 HTML 標籤）- 優化版本
    */
-  const startTypewriter = useCallback((text) => {
+  const startTypewriter = useCallback((text, speaker) => {
     setDisplayedText('');
     setIsTyping(true);
     
@@ -128,8 +184,28 @@ const VisualNovelEngine = ({ script, onComplete, isEndingBA = false, hideParticl
         const isSlow = charIsSlowMap[charIndex]; // 檢查是否需要慢速顯示
         charIndex++;
         
-        // 在所有標點符號處停頓0.4秒，slow標籤內字符150ms，其他字符40ms
+        // 根据说话者播放对应的音效（每次字符出现时播放短音效，配合打字机速度）
+        // 只在非标点符号时播放，避免标点符号时也播放音效
         const punctuationMarks = ['，', '。', '！', '？', '；', '：', '、', '…', '─', '—', '～', '‧'];
+        if (!punctuationMarks.includes(currentChar)) {
+          if (speaker === 'protagonist' && protagonistAudioRef.current) {
+            // 克隆音频以支持快速连续播放
+            const audio = protagonistAudioRef.current.cloneNode();
+            audio.volume = 0.3;
+            audio.play().catch(() => {
+              // 忽略播放错误（可能是浏览器限制）
+            });
+          } else if (speaker === 'editor' && editorAudioRef.current) {
+            // 克隆音频以支持快速连续播放
+            const audio = editorAudioRef.current.cloneNode();
+            audio.volume = 0.3;
+            audio.play().catch(() => {
+              // 忽略播放错误（可能是浏览器限制）
+            });
+          }
+        }
+        
+        // 在所有標點符號處停頓0.4秒，slow標籤內字符150ms，其他字符40ms
         let delay;
         if (punctuationMarks.includes(currentChar)) {
           delay = 400; // 標點符號停頓
@@ -156,6 +232,16 @@ const VisualNovelEngine = ({ script, onComplete, isEndingBA = false, hideParticl
       clearTimeout(typewriterTimer.current);
       typewriterTimer.current = null;
     }
+    
+    // 停止音效
+    if (currentNode && currentNode.speaker === 'protagonist' && protagonistAudioRef.current) {
+      protagonistAudioRef.current.pause();
+      protagonistAudioRef.current.currentTime = 0;
+    } else if (currentNode && currentNode.speaker === 'editor' && editorAudioRef.current) {
+      editorAudioRef.current.pause();
+      editorAudioRef.current.currentTime = 0;
+    }
+    
     if (currentNode && currentNode.text) {
       setDisplayedText(currentNode.text);
       setIsTyping(false);
@@ -522,9 +608,25 @@ const VisualNovelEngine = ({ script, onComplete, isEndingBA = false, hideParticl
     if (onNodeChange && currentNode) {
       onNodeChange(currentNode.className || '');
     }
+    
+    // 检查是否需要播放人群交谈音效（根据节点ID或className判断）
+    // 如果节点有crowdChat属性，播放人群交谈音效
+    if (currentNode && currentNode.crowdChat) {
+      if (crowdChatAudioRef.current) {
+        crowdChatAudioRef.current.play().catch(err => {
+          console.warn('播放人群交谈音效失败:', err);
+        });
+      }
+    } else {
+      // 停止人群交谈音效
+      if (crowdChatAudioRef.current) {
+        crowdChatAudioRef.current.pause();
+        crowdChatAudioRef.current.currentTime = 0;
+      }
+    }
 
     if (currentNode && currentNode.type === 'dialogue' && currentNode.text) {
-      startTypewriter(currentNode.text);
+      startTypewriter(currentNode.text, currentNode.speaker);
       // 保存完整的對話節點（包含完整文字），用於選項顯示時展示
       setLastDialogue({
         ...currentNode,
@@ -533,6 +635,14 @@ const VisualNovelEngine = ({ script, onComplete, isEndingBA = false, hideParticl
     } else if (currentNode && currentNode.type === 'animation') {
       // 處理動畫節點
       if (currentNode.animationType === 'drinkCoffee') {
+        // 播放啜饮音效
+        if (drinkCoffeeAudioRef.current) {
+          drinkCoffeeAudioRef.current.currentTime = 0;
+          drinkCoffeeAudioRef.current.play().catch(err => {
+            console.warn('播放啜饮音效失败:', err);
+          });
+        }
+        
         // 清除對話框文字，觸發喝咖啡動畫
         setDisplayedText('');
         setIsTyping(false);

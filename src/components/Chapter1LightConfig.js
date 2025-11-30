@@ -37,7 +37,7 @@ const Chapter1LightConfig = {
   baseAmbientLight: 0.01,
   
   // 渲染器曝光度 - 平衡螢幕发光和整体亮度
-  toneMappingExposure: 0.05,
+  toneMappingExposure: 0.03,
   
   // 材质自发光系数
   emissiveMultiplier: 0.0001,

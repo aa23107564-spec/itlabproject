@@ -19,6 +19,8 @@ function Chapter2() {
   const [flickerCount, setFlickerCount] = useState(0); // 閃爍次數計數
   const [videoLoaded, setVideoLoaded] = useState(false); // 視頻是否已加載
   const videoRef = React.useRef(null); // 視頻元素引用
+  const bgmAudioRef = React.useRef(null); // 第二章背景音乐引用
+  const drinkCoffeeAudioRef = React.useRef(null); // 啜饮音效引用（用于开场动画）
   // 使用三個圖片層來避免 src 切換導致的閃現
   const [imageOpacities, setImageOpacities] = useState({
     img22_1: 0, // 第一個 22.jpg，用於初始淡入和最終顯示
@@ -61,7 +63,29 @@ function Chapter2() {
   // 只有在鍵盤引導頁面消失後才開始播放
   useEffect(() => {
     if (!showIntro) {
-      // 啟動動畫開始標記（觸發 CSS 淡入動畫）
+      // 初始化并播放第二章背景音乐
+      bgmAudioRef.current = new Audio(`${process.env.PUBLIC_URL || ''}/audio/bgm/鋼琴bgm_第二章.mp3`);
+      bgmAudioRef.current.volume = 0.5;
+      bgmAudioRef.current.loop = false;
+      bgmAudioRef.current.preload = 'auto';
+      
+      // 监听音乐结束事件，结束后等待1秒再重新播放
+      bgmAudioRef.current.addEventListener('ended', () => {
+        setTimeout(() => {
+          if (bgmAudioRef.current) {
+            bgmAudioRef.current.play().catch(err => {
+              console.warn('播放背景音乐失败:', err);
+            });
+          }
+        }, 1000); // 等待1秒
+      });
+      
+      // 开始播放背景音乐
+      bgmAudioRef.current.play().catch(err => {
+        console.warn('播放背景音乐失败（可能需要用户交互）:', err);
+      });
+      
+      // 启动動畫開始標記（觸發 CSS 淡入動畫）
       setStartAnimation(true);
       
       // 第一階段：22.jpg 從黑屏淡入（0-2秒），使用 CSS 動畫
@@ -69,6 +93,17 @@ function Chapter2() {
       
       // 第二階段：drinkcoffee.jpg 淡入（2-3.5秒）
       const timer1 = setTimeout(() => {
+        // 播放啜饮音效
+        if (!drinkCoffeeAudioRef.current) {
+          drinkCoffeeAudioRef.current = new Audio(`${process.env.PUBLIC_URL || ''}/audio/sfx/啜飲音效.mp3`);
+          drinkCoffeeAudioRef.current.volume = 0.5;
+          drinkCoffeeAudioRef.current.preload = 'auto';
+        }
+        drinkCoffeeAudioRef.current.currentTime = 0;
+        drinkCoffeeAudioRef.current.play().catch(err => {
+          console.warn('播放啜饮音效失败:', err);
+        });
+        
         setImageOpacities({
           img22_1: 1, // 保持顯示
           imgDrink: 1, // 淡入
@@ -94,6 +129,18 @@ function Chapter2() {
         clearTimeout(timer1);
         clearTimeout(timer2);
         clearTimeout(contentTimer);
+        // 清理背景音乐
+        if (bgmAudioRef.current) {
+          bgmAudioRef.current.pause();
+          bgmAudioRef.current.currentTime = 0;
+          bgmAudioRef.current = null;
+        }
+        // 清理啜饮音效
+        if (drinkCoffeeAudioRef.current) {
+          drinkCoffeeAudioRef.current.pause();
+          drinkCoffeeAudioRef.current.currentTime = 0;
+          drinkCoffeeAudioRef.current = null;
+        }
       };
     }
   }, [showIntro]);

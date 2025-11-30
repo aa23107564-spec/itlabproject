@@ -27,6 +27,15 @@
   justify-content: center;
   /* 移除淡入动画，确保内容立即可见，避免闪现登录页面 */
   opacity: 1;
+  transition: opacity 0.3s ease-in;
+}
+
+.keyboard-intro-content.content-hidden {
+  opacity: 0;
+}
+
+.keyboard-intro-content.content-visible {
+  opacity: 1;
 }
 
 /* 鍵盤和標籤容器 */

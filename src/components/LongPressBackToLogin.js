@@ -63,7 +63,8 @@ const LongPressBackToLogin = ({
   } else if (position === 'top-right') {
     positionStyle = { right: '16px', top: '16px' };
   } else {
-    positionStyle = { right: '216px', bottom: '31px' };
+    // 調整 right 值，往左移動一點點（從 216px 改為 180px）
+    positionStyle = { right: '180px', bottom: '31px' };
   }
 
   return (
