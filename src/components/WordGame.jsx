@@ -43,7 +43,7 @@ const gameData = [
   }
 ];
 
-export default function WordGame({ startDelay = 2000 }) {
+export default function WordGame({ startDelay = 2000, onGameComplete }) {
   const [currentParagraph, setCurrentParagraph] = useState(0);
   const [displayedText, setDisplayedText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -81,6 +81,8 @@ export default function WordGame({ startDelay = 2000 }) {
   const [replacedWords, setReplacedWords] = useState({}); // 儲存已替換的詞彙
   const [showCompleteHint, setShowCompleteHint] = useState(false); // 顯示完成提示
   const [completedParagraphs, setCompletedParagraphs] = useState([]); // 儲存已完成的段落
+  const [isGameCompleted, setIsGameCompleted] = useState(false); // 遊戲是否已完成
+  const [shouldHideCurrentParagraph, setShouldHideCurrentParagraph] = useState(false); // 是否隱藏當前段落
   
   const textContainerRef = useRef(null);
   const cursorRef = useRef(null);
@@ -221,8 +223,26 @@ export default function WordGame({ startDelay = 2000 }) {
       setShowChoiceMenu(false);
       setReplacedWords({}); // 重置替換的詞彙
       setShowCompleteHint(false); // 重置完成提示
+    } else {
+      // 遊戲完成：保存最後一個段落並觸發完成回調（只觸發一次）
+      if (!isGameCompleted) {
+        setIsGameCompleted(true);
+        setShouldHideCurrentParagraph(true); // 隱藏當前段落，避免重複顯示
+        
+        const currentParagraphData = {
+          ...gameData[currentParagraph],
+          replacedWords: { ...replacedWords },
+          displayText: gameData[currentParagraph].text
+        };
+        setCompletedParagraphs(prev => [...prev, currentParagraphData]);
+        
+        // 觸發遊戲完成回調
+        if (onGameComplete) {
+          onGameComplete();
+        }
+      }
     }
-  }, [currentParagraph, replacedWords]);
+  }, [currentParagraph, replacedWords, onGameComplete]);
 
   // 鍵盤控制
   useEffect(() => {
@@ -251,6 +271,10 @@ export default function WordGame({ startDelay = 2000 }) {
     };
     
     const executeGameOperation = (e, currentState) => {
+      // 如果遊戲已完成，不處理任何按鍵
+      if (isGameCompleted) {
+        return;
+      }
       
       // 在段尾按下下鍵，進入下一段
       if (e.key === 'ArrowDown' && currentState.gameState === 'selecting' && currentState.selectedWordId === null) {
@@ -341,14 +365,16 @@ export default function WordGame({ startDelay = 2000 }) {
           setGameState('selecting');
         }
       } else if (currentState.gameState === 'selecting' && e.key === 'ArrowDown' && currentState.selectedWordId === null) {
-        // 在段尾按下下鍵，進入下一段
-        startNewParagraph();
+        // 在段尾按下下鍵，進入下一段或完成遊戲
+        if (!isGameCompleted) {
+          startNewParagraph();
+        }
       }
     };
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [startNewParagraph]);
+  }, [startNewParagraph, isGameCompleted]);
 
   // 開始第一段
   useEffect(() => {
@@ -551,19 +577,21 @@ export default function WordGame({ startDelay = 2000 }) {
               ))}
               
               {/* 當前段落 */}
-              <div className="current-paragraph">
-                {renderText()}
-                {isTyping && (
-                  <span className="cursor-static" style={{ position: 'absolute', marginLeft: '-6px' }}>|</span>
-                )}
-                
-                {/* 完成提示 */}
-                {showCompleteHint && (
-                  <div className="complete-hint">
-                    左右移動以選擇字詞，按下確認可開啟選單，在段尾按下確認以繼續
-                  </div>
-                )}
-              </div>
+              {!shouldHideCurrentParagraph && (
+                <div className="current-paragraph">
+                  {renderText()}
+                  {isTyping && (
+                    <span className="cursor-static" style={{ position: 'absolute', marginLeft: '-6px' }}>|</span>
+                  )}
+                  
+                  {/* 完成提示 */}
+                  {showCompleteHint && (
+                    <div className="complete-hint">
+                      左右移動以選擇字詞，按下確認可開啟選單，在段尾按下確認以繼續
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             
             {/* 選詞選單 */}

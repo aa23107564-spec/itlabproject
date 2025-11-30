@@ -2728,10 +2728,9 @@ useEffect(() => {
   
   // 水槽文字下一段
   const goNextSinkSegment = useCallback(() => {
-    // 如果正在打字，先跳过打字机动画，然后继续
+    // 如果正在打字，不允许继续，必须等文字全部显示完（使用 ref 获取最新值）
     if (sinkIsTypingRef.current) {
-      skipSinkTypewriter();
-      // 跳过动画后，继续执行下面的逻辑
+      return;
     }
     
     // 检查是否还有下一段（使用 ref 获取最新值，避免闭包问题）
@@ -2773,7 +2772,7 @@ useEffect(() => {
       // 直接缩小建模，让资讯框立即隐藏
       setIsZoomed(false);
     }
-  }, [playPageFlipSound, skipNewNoteTypewriter]);
+  }, [playPageFlipSound]);
   const startMokaPotTypewriter = useCallback((text) => {
     setMokaPotDisplayedText('');
     setMokaPotIsTyping(true);
@@ -2927,10 +2926,9 @@ useEffect(() => {
   
   // 旧笔记本文字下一段
   const goNextOldNoteSegment = useCallback(() => {
-    // 如果正在打字，先跳过打字机动画，然后继续
+    // 如果正在打字，不允许继续，必须等文字全部显示完（使用 ref 获取最新值）
     if (oldNoteIsTypingRef.current) {
-      skipOldNoteTypewriter();
-      // 跳过动画后，继续执行下面的逻辑
+      return;
     }
     
     // 检查是否还有下一段（使用 ref 获取最新值，避免闭包问题）
@@ -2972,7 +2970,7 @@ useEffect(() => {
       // 直接缩小建模，让资讯框立即隐藏
       setIsZoomed(false);
     }
-  }, [playPageFlipSound, skipOldNoteTypewriter]);
+  }, [playPageFlipSound]);
   
   // 新笔记本打字机动画
   const startNewNoteTypewriter = useCallback((text) => {
@@ -3076,10 +3074,9 @@ useEffect(() => {
   
   // 新笔记本文字下一段
   const goNextNewNoteSegment = useCallback(() => {
-    // 如果正在打字，先跳过打字机动画，然后继续
+    // 如果正在打字，不允许继续，必须等文字全部显示完（使用 ref 获取最新值）
     if (newNoteIsTypingRef.current) {
-      skipNewNoteTypewriter();
-      // 跳过动画后，继续执行下面的逻辑
+      return;
     }
     
     // 检查是否还有下一段（使用 ref 获取最新值，避免闭包问题）
@@ -3121,7 +3118,7 @@ useEffect(() => {
       // 直接缩小建模，让资讯框立即隐藏
       setIsZoomed(false);
     }
-  }, [playPageFlipSound, skipNewNoteTypewriter]);
+  }, [playPageFlipSound]);
   
   // 当水槽被放大时，初始化打字机动画
   useEffect(() => {
