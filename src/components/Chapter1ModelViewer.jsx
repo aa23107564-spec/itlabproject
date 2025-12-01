@@ -1806,6 +1806,14 @@ function Chapter1ModelViewer() {
   const newNoteIsTypingRef = useRef(false); // 用于跟踪打字状态，避免闭包问题
   const newNoteCurrentSegmentRef = useRef(0); // 用于跟踪当前段，避免闭包问题
 
+  // 追蹤互動狀態：記錄哪些物件已被互動過
+  const [interactedObjects, setInteractedObjects] = useState({
+    sink: false,
+    mokaPot: false,
+    oldNote: false,
+    newNote: false
+  });
+
   const latestSelectionRef = useRef({ name: 'mokaPot', index: 1 });
   const hasPrewarmedZoomRef = useRef(false);
   const pendingInstantZoomRef = useRef(false);
@@ -1856,6 +1864,60 @@ function Chapter1ModelViewer() {
   const flashbackVideoRef = useRef(null);
   const flashbackVideoSrc = useMemo(() => `${process.env.PUBLIC_URL || ''}/images/backgrounds/270108_tiny.mp4`, []);
   const pageFlipAudioRef = useRef(null); // 快速翻页声音效引用
+  
+  // 追蹤互動狀態：當物件查看完（到達最後一段且不在打字）並縮小後，才標記為已互動完成
+  useEffect(() => {
+    if (!isZoomed && selectedObjectName) {
+      // 物件已縮小，檢查是否查看完
+      let isCompleted = false;
+      let isNotTyping = false;
+      
+      if (selectedObjectName === 'sink') {
+        // sink 有 6 個段落（索引 0-5）
+        const totalSegments = sinkTexts.current.length;
+        isCompleted = sinkCurrentSegment >= totalSegments - 1;
+        isNotTyping = !sinkIsTyping;
+      } else if (selectedObjectName === 'mokaPot') {
+        // mokaPot 有 3 個段落（索引 0-2）
+        const totalSegments = mokaPotTexts.current.length;
+        isCompleted = mokaPotCurrentSegment >= totalSegments - 1;
+        isNotTyping = !mokaPotIsTyping;
+      } else if (selectedObjectName === 'oldNote') {
+        // oldNote 有 2 個段落（索引 0-1）
+        const totalSegments = oldNoteTexts.current.length;
+        isCompleted = oldNoteCurrentSegment >= totalSegments - 1;
+        isNotTyping = !oldNoteIsTyping;
+      } else if (selectedObjectName === 'newNote') {
+        // newNote 有 4 個段落（索引 0-3）
+        const totalSegments = newNoteTexts.current.length;
+        isCompleted = newNoteCurrentSegment >= totalSegments - 1;
+        isNotTyping = !newNoteIsTyping;
+      }
+      
+      // 如果查看完且不在打字，標記為已互動完成
+      if (isCompleted && isNotTyping) {
+        setInteractedObjects(prev => {
+          // 如果已經標記為已互動，不重複更新
+          if (prev[selectedObjectName]) {
+            return prev;
+          }
+          // 標記為已互動完成
+          return {
+            ...prev,
+            [selectedObjectName]: true
+          };
+        });
+      }
+    }
+  }, [isZoomed, selectedObjectName, sinkCurrentSegment, sinkIsTyping, mokaPotCurrentSegment, mokaPotIsTyping, oldNoteCurrentSegment, oldNoteIsTyping, newNoteCurrentSegment, newNoteIsTyping]);
+  
+  // 檢查是否所有物件都已互動完成
+  const allObjectsInteracted = useMemo(() => {
+    return interactedObjects.sink && 
+           interactedObjects.mokaPot && 
+           interactedObjects.oldNote && 
+           interactedObjects.newNote;
+  }, [interactedObjects]);
   
   // 播放快速翻页声音效的辅助函数 - 立即播放，无延迟
   const playPageFlipSound = useCallback(() => {
@@ -2662,6 +2724,20 @@ useEffect(() => {
             return;
           }
           
+          // 檢查資訊框是否正在顯示，如果是則阻止左右鍵操作
+          const isInfoBoxDisplayed = isZoomed && (
+            (selectedObjectName === 'sink' && sinkDisplayedText) ||
+            (selectedObjectName === 'mokaPot' && mokaPotDisplayedText) ||
+            (selectedObjectName === 'oldNote' && oldNoteDisplayedText) ||
+            (selectedObjectName === 'newNote' && newNoteDisplayedText)
+          );
+          
+          if (isInfoBoxDisplayed) {
+            // 資訊框正在顯示，阻止左右鍵操作
+            pendingKeyActionRef.current = null;
+            return;
+          }
+          
           // 执行单个键操作
           // 如果当前没有物件被放大（交互物件选择模式），播放旋转建模声
           if (!isZoomed) {
@@ -2763,7 +2839,7 @@ useEffect(() => {
         pendingKeyActionRef.current = null;
       }
     };
-  }, [interactiveObjects, selectedObjectName, isZoomed, goNextSinkSegment, goNextMokaPotSegment, goNextOldNoteSegment, goNextNewNoteSegment, isSceneReady, playPageFlipSound]);
+  }, [interactiveObjects, selectedObjectName, isZoomed, goNextSinkSegment, goNextMokaPotSegment, goNextOldNoteSegment, goNextNewNoteSegment, isSceneReady, playPageFlipSound, sinkDisplayedText, mokaPotDisplayedText, oldNoteDisplayedText, newNoteDisplayedText]);
   
   // 水槽打字机动画
   const startSinkTypewriter = useCallback((text) => {
@@ -4150,7 +4226,7 @@ useEffect(() => {
                 fontStyle: 'normal',
                 fontWeight: 500,
               margin: '0 0 20px 0',
-              fontSize: '28px',
+        fontSize: '28px',
                 lineHeight: '30px',
                 color: infoBoxTheme.textColor,
                 borderBottom: `1px solid ${infoBoxTheme.borderColor}`,
@@ -4195,6 +4271,37 @@ useEffect(() => {
               )}
             </div>
           </div>
+        </div>
+      )}
+      
+      {/* 章節完成提示：當所有物件都互動完成時顯示 */}
+      {allObjectsInteracted && (
+        <div style={{
+          position: 'absolute',
+          top: '40px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 1000,
+        pointerEvents: 'none',
+          animation: 'fadeIn 0.5s ease-in'
+        }}>
+          <div style={{
+            fontFamily: '点点像素体-方形, monospace',
+            fontStyle: 'normal',
+            fontWeight: 500,
+            fontSize: '20px',
+            lineHeight: '28px',
+            color: '#FFFFFF',
+            textAlign: 'center',
+            textShadow: '2px 2px 4px rgba(0, 0, 0, 0.8)',
+            backgroundColor: 'rgba(0, 0, 0, 0.6)',
+            padding: '12px 24px',
+            borderRadius: '8px',
+            border: '2px solid rgba(255, 255, 255, 0.3)',
+            whiteSpace: 'nowrap'
+          }}>
+            場景已調查完畢，如要退出請同時長按左右兩鍵
+      </div>
         </div>
       )}
       
