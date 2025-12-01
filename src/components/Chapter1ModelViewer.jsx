@@ -1121,9 +1121,11 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
   const rotationGroupRef = useRef(); // 用于包含所有需要旋转的元素
   const [lights, setLights] = useState([]);
   const [lightsLoaded, setLightsLoaded] = useState(false); // 追蹤燈光是否已成功加載
+  const [useFallback, setUseFallback] = useState(true); // 初始時使用 fallback 燈光，避免畫面全黑
   const retryTimeoutRef = useRef(null); // 重試計時器
-  const maxRetriesRef = useRef(3); // 最大重試次數
+  const maxRetriesRef = useRef(5); // 最大重試次數（增加到5次）
   const retryCountRef = useRef(0); // 當前重試次數
+  const timeoutRef = useRef(null); // 超時計時器
   
   // 加载主 GLB 模型（Hooks 必須在頂層調用）
   const { scene, animations, cameras } = useGLTF(modelPath);
@@ -1299,32 +1301,71 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
           if (retryTimeoutRef.current) {
             clearTimeout(retryTimeoutRef.current);
           }
-          // 延遲重試（每次延遲時間遞增）
-          retryTimeoutRef.current = setTimeout(() => {
-            const retryLights = extractLights();
-            if (retryLights.length > 0) {
-              setLights(retryLights);
-              setLightsLoaded(true);
-              retryCountRef.current = 0; // 重置重試計數
-              console.log(`✅ 重試成功：成功提取 ${retryLights.length} 個燈光`);
-            } else if (retryCountRef.current >= maxRetriesRef.current) {
-              // 達到最大重試次數，使用 fallback 燈光
-              setLights([]);
-              setLightsLoaded(true); // 標記為已加載（使用 fallback）
-              console.warn('⚠️ 達到最大重試次數，將使用 fallback 燈光');
-            }
-          }, 500 * retryCountRef.current); // 遞增延遲：500ms, 1000ms, 1500ms
+          
+          // 使用遞歸函數進行重試
+          const attemptRetry = (attemptNumber) => {
+            retryTimeoutRef.current = setTimeout(() => {
+              // 再次檢查場景是否已加載
+              if (scene && lightModel.scene && spotLightsModel.scene) {
+                const retryLights = extractLights();
+                if (retryLights.length > 0) {
+                  // 成功提取燈光
+                  setLights(retryLights);
+                  setLightsLoaded(true);
+                  setUseFallback(false); // 成功加載，關閉 fallback
+                  retryCountRef.current = 0; // 重置重試計數
+                  if (retryTimeoutRef.current) {
+                    clearTimeout(retryTimeoutRef.current);
+                    retryTimeoutRef.current = null;
+                  }
+                  console.log(`✅ 重試成功（第 ${attemptNumber} 次）：成功提取 ${retryLights.length} 個燈光`);
+                } else {
+                  // 重試失敗，繼續重試（如果還沒達到最大次數）
+                  if (retryCountRef.current < maxRetriesRef.current) {
+                    retryCountRef.current++;
+                    attemptRetry(attemptNumber + 1); // 遞歸調用
+                  } else {
+                    // 達到最大重試次數，使用 fallback 燈光
+                    setLights([]);
+                    setLightsLoaded(true);
+                    setUseFallback(true); // 保持 fallback
+                    console.warn('⚠️ 達到最大重試次數，將使用 fallback 燈光');
+                  }
+                }
+              } else {
+                // 場景還沒加載完成，繼續重試
+                if (retryCountRef.current < maxRetriesRef.current) {
+                  retryCountRef.current++;
+                  attemptRetry(attemptNumber + 1); // 遞歸調用
+                } else {
+                  // 達到最大重試次數，使用 fallback 燈光
+                  setLights([]);
+                  setLightsLoaded(true);
+                  setUseFallback(true); // 保持 fallback
+                  console.warn('⚠️ 達到最大重試次數，將使用 fallback 燈光');
+                }
+              }
+            }, 300 * attemptNumber); // 遞增延遲：300ms, 600ms, 900ms, 1200ms, 1500ms
+          };
+          
+          attemptRetry(retryCountRef.current);
         } else {
           // 達到最大重試次數，使用 fallback 燈光
           setLights([]);
           setLightsLoaded(true);
+          setUseFallback(true); // 保持 fallback
           console.warn('⚠️ 達到最大重試次數，將使用 fallback 燈光');
         }
       } else {
         // 成功提取燈光
         setLights(extractedLights);
         setLightsLoaded(true);
+        setUseFallback(false); // 成功加載，關閉 fallback
         retryCountRef.current = 0; // 重置重試計數
+        if (retryTimeoutRef.current) {
+          clearTimeout(retryTimeoutRef.current);
+          retryTimeoutRef.current = null;
+        }
         console.log(`✅ 成功提取 ${extractedLights.length} 個燈光`);
       }
       
@@ -1367,18 +1408,32 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
     }
   }, [scene, lightModel.scene, spotLightsModel.scene, cameras, extractLights]); // 添加 extractLights 依賴
   
-  // 添加超時機制：如果燈光在 5 秒內沒有加載，使用 fallback
+  // 添加超時機制：如果燈光在 3 秒內沒有加載，確保使用 fallback
   useEffect(() => {
-    const timeout = setTimeout(() => {
-      if (!lightsLoaded && lights.length === 0) {
-        console.warn('⚠️ 燈光加載超時，使用 fallback 燈光');
-        setLights([]);
-        setLightsLoaded(true);
-      }
-    }, 5000); // 5 秒超時
+    // 清除之前的超時計時器
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
     
-    return () => clearTimeout(timeout);
-  }, [lightsLoaded, lights.length]);
+    // 如果還沒有成功加載燈光，設置超時
+    if (!lightsLoaded || lights.length === 0) {
+      timeoutRef.current = setTimeout(() => {
+        if (!lightsLoaded || lights.length === 0) {
+          console.warn('⚠️ 燈光加載超時，確保使用 fallback 燈光');
+          setLights([]);
+          setLightsLoaded(true);
+          setUseFallback(true); // 確保使用 fallback
+        }
+      }, 3000); // 縮短到 3 秒超時
+    }
+    
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+  }, []); // 只在組件掛載時執行一次
   
   // 清理重試計時器
   useEffect(() => {
@@ -1435,7 +1490,7 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
         />
         
         {/* 渲染从 light.glb 提取的主场景灯光（放在 group 内，随场景旋转） */}
-        {lights.length > 0 ? (
+        {lights.length > 0 && !useFallback ? (
           lights.map((light, index) => (
             <Light key={`light-${index}-${light.name}`} lightData={light} isZoomed={isZoomed} />
           ))
@@ -1443,7 +1498,7 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
         
         {/* 如果模型中没有灯光或燈光加載失敗，添加基础照明（使用配置文件） */}
         {/* 在燈光加載期間也顯示 fallback 燈光，避免畫面全黑 */}
-        {lights.length === 0 && (
+        {useFallback && (
           <>
             <ambientLight intensity={Chapter1LightConfig.fallbackLights.ambient} />
             <directionalLight 
