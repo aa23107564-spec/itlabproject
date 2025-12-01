@@ -1126,7 +1126,7 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
   const maxRetriesRef = useRef(8); // 最大重試次數（增加到8次，應對 GitHub Pages 的網路延遲）
   const retryCountRef = useRef(0); // 當前重試次數
   const timeoutRef = useRef(null); // 超時計時器
-  const [mountKey, setMountKey] = useState(0); // 組件掛載次數，用於強制重新執行燈光提取
+  const [reloadTrigger, setReloadTrigger] = useState(0); // 觸發重新加載的狀態（用於組件重新掛載時）
   
   // 加载主 GLB 模型（Hooks 必須在頂層調用）
   const { scene, animations, cameras } = useGLTF(modelPath);
@@ -1138,18 +1138,26 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
   const spotLightsModel = useGLTF(spotLightsPath);
   
   // 組件掛載時重置所有狀態（確保每次進入頁面時都重新開始）
+  // 使用 useRef 追蹤是否是第一次掛載
+  const isFirstMountRef = useRef(true);
+  
   useEffect(() => {
-    console.log('🔄 組件掛載，重置燈光加載狀態');
-    // 增加掛載計數，強制重新執行燈光提取邏輯
-    setMountKey(prev => prev + 1);
+    // 只在非第一次掛載時才重置狀態（避免干擾第一次加載）
+    if (!isFirstMountRef.current) {
+      console.log('🔄 組件重新掛載，重置燈光加載狀態');
+      // 觸發重新加載
+      setReloadTrigger(prev => prev + 1);
+      // 重置所有狀態
+      setLights([]);
+      setLightsLoaded(false);
+      setUseFallback(true); // 初始時使用 fallback 燈光
+      retryCountRef.current = 0;
+    } else {
+      console.log('🔄 組件第一次掛載');
+      isFirstMountRef.current = false;
+    }
     
-    // 重置所有狀態
-    setLights([]);
-    setLightsLoaded(false);
-    setUseFallback(true); // 初始時使用 fallback 燈光
-    retryCountRef.current = 0;
-    
-    // 清除所有計時器
+    // 清除所有計時器（無論是否第一次掛載）
     if (retryTimeoutRef.current) {
       clearTimeout(retryTimeoutRef.current);
       retryTimeoutRef.current = null;
@@ -1267,6 +1275,12 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
   }, [scene, lightModel.scene, spotLightsModel.scene]);
   
   useEffect(() => {
+    // 如果 reloadTrigger 變化，重置重試計數（組件重新掛載時）
+    if (reloadTrigger > 0) {
+      console.log('🔄 檢測到重新掛載觸發，重置重試計數');
+      retryCountRef.current = 0;
+    }
+    
     if (scene && lightModel.scene && spotLightsModel.scene) {
       // 强制更新场景的世界矩阵
       lightModel.scene.updateMatrixWorld(true);
@@ -1472,7 +1486,7 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
         }
       });
     }
-  }, [scene, lightModel.scene, spotLightsModel.scene, cameras, extractLights, mountKey]); // 添加 extractLights 和 mountKey 依賴，確保每次掛載時重新執行
+  }, [scene, lightModel.scene, spotLightsModel.scene, cameras, extractLights, reloadTrigger]); // 添加 extractLights 和 reloadTrigger 依賴，確保重新掛載時重新執行
   
   // 添加超時機制：如果燈光在 10 秒內沒有加載，確保使用 fallback（考慮 GitHub Pages 的網路延遲）
   useEffect(() => {
