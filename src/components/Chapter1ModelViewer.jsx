@@ -1126,6 +1126,7 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
   const maxRetriesRef = useRef(8); // 最大重試次數（增加到8次，應對 GitHub Pages 的網路延遲）
   const retryCountRef = useRef(0); // 當前重試次數
   const timeoutRef = useRef(null); // 超時計時器
+  const [mountKey, setMountKey] = useState(0); // 組件掛載次數，用於強制重新執行燈光提取
   
   // 加载主 GLB 模型（Hooks 必須在頂層調用）
   const { scene, animations, cameras } = useGLTF(modelPath);
@@ -1135,6 +1136,42 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
   
   // 加载交互 Spot 灯光 GLB 文件
   const spotLightsModel = useGLTF(spotLightsPath);
+  
+  // 組件掛載時重置所有狀態（確保每次進入頁面時都重新開始）
+  useEffect(() => {
+    console.log('🔄 組件掛載，重置燈光加載狀態');
+    // 增加掛載計數，強制重新執行燈光提取邏輯
+    setMountKey(prev => prev + 1);
+    
+    // 重置所有狀態
+    setLights([]);
+    setLightsLoaded(false);
+    setUseFallback(true); // 初始時使用 fallback 燈光
+    retryCountRef.current = 0;
+    
+    // 清除所有計時器
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    
+    // 清理函數：組件卸載時清除計時器
+    return () => {
+      console.log('🧹 組件卸載，清理計時器');
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+    };
+  }, []); // 只在組件掛載時執行一次
   
   // 提取燈光的函數
   const extractLights = useCallback(() => {
@@ -1435,7 +1472,7 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
         }
       });
     }
-  }, [scene, lightModel.scene, spotLightsModel.scene, cameras, extractLights]); // 添加 extractLights 依賴
+  }, [scene, lightModel.scene, spotLightsModel.scene, cameras, extractLights, mountKey]); // 添加 extractLights 和 mountKey 依賴，確保每次掛載時重新執行
   
   // 添加超時機制：如果燈光在 10 秒內沒有加載，確保使用 fallback（考慮 GitHub Pages 的網路延遲）
   useEffect(() => {
@@ -3598,13 +3635,21 @@ useEffect(() => {
           
           // 處理 WebGL 上下文丟失和恢復
           gl.domElement.addEventListener('webglcontextlost', (e) => {
-            console.warn('WebGL context lost - 可能是 GPU 記憶體不足');
+            console.warn('⚠️ WebGL context lost - 可能是 GPU 記憶體不足，將在 500ms 後重新載入頁面');
             e.preventDefault(); // 阻止預設行為，嘗試恢復
+            
+            // 立即重新載入頁面，因為當 context lost 時，整個 Canvas 都無法渲染
+            setTimeout(() => {
+              window.location.reload();
+            }, 500);
           });
           
           gl.domElement.addEventListener('webglcontextrestored', () => {
-            console.log('WebGL context restored');
-            window.location.reload(); // 恢復後重新載入頁面
+            console.log('✅ WebGL context restored，將重新載入頁面');
+            // 如果 context restored，也重新載入頁面確保一切正常
+            setTimeout(() => {
+              window.location.reload();
+            }, 1000);
           });
         }}
         style={{ 
