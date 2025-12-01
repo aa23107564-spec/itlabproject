@@ -1139,6 +1139,11 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
   // 提取燈光的函數
   const extractLights = useCallback(() => {
     if (!scene || !lightModel.scene || !spotLightsModel.scene) {
+      console.warn('⚠️ extractLights: 場景未完全加載', {
+        scene: !!scene,
+        lightModel: !!lightModel.scene,
+        spotLightsModel: !!spotLightsModel.scene
+      });
       return [];
     }
     
@@ -1147,10 +1152,12 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
     spotLightsModel.scene.updateMatrixWorld(true);
     
     const extractedLights = [];
+    let lightCount = 0;
     
     lightModel.scene.traverse((child) => {
       // 检查是否为灯光对象（包括所有类型）
       if (child.isLight) {
+        lightCount++;
         // 保存原始强度和名称
         const originalIntensity = child.intensity;
         const lightName = child.name || '未命名灯光';
@@ -1204,6 +1211,8 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
         child.visible = false;
       }
     });
+    
+    console.log(`🔍 extractLights: 在 lightModel.scene 中找到 ${lightCount} 個燈光物件，成功提取 ${extractedLights.length} 個燈光`);
     
     return extractedLights;
   }, [scene, lightModel.scene, spotLightsModel.scene]);
@@ -1366,7 +1375,7 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
           clearTimeout(retryTimeoutRef.current);
           retryTimeoutRef.current = null;
         }
-        console.log(`✅ 成功提取 ${extractedLights.length} 個燈光`);
+        console.log(`✅ 成功提取 ${extractedLights.length} 個燈光，關閉 fallback 燈光`);
       }
       
       // 处理主场景模型中的材质自发光
@@ -1413,19 +1422,24 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
     // 清除之前的超時計時器
     if (timeoutRef.current) {
       clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    
+    // 如果已經成功加載燈光，不需要設置超時
+    if (lightsLoaded && lights.length > 0) {
+      return;
     }
     
     // 如果還沒有成功加載燈光，設置超時
-    if (!lightsLoaded || lights.length === 0) {
-      timeoutRef.current = setTimeout(() => {
-        if (!lightsLoaded || lights.length === 0) {
-          console.warn('⚠️ 燈光加載超時，確保使用 fallback 燈光');
-          setLights([]);
-          setLightsLoaded(true);
-          setUseFallback(true); // 確保使用 fallback
-        }
-      }, 3000); // 縮短到 3 秒超時
-    }
+    timeoutRef.current = setTimeout(() => {
+      // 再次檢查狀態，確保在超時時仍然沒有燈光
+      if (!lightsLoaded || lights.length === 0) {
+        console.warn('⚠️ 燈光加載超時，確保使用 fallback 燈光');
+        setLights([]);
+        setLightsLoaded(true);
+        setUseFallback(true); // 確保使用 fallback
+      }
+    }, 3000); // 3 秒超時
     
     return () => {
       if (timeoutRef.current) {
@@ -1433,7 +1447,7 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
         timeoutRef.current = null;
       }
     };
-  }, []); // 只在組件掛載時執行一次
+  }, [lightsLoaded, lights.length]); // 監聽 lightsLoaded 和 lights.length 的變化
   
   // 清理重試計時器
   useEffect(() => {
@@ -1450,6 +1464,17 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
       onLightsExtracted(lights);
     }
   }, [lights.length, onLightsExtracted]); // onLightsExtracted 现在用 useCallback 包装，不会变化
+  
+  // 調試：監聽燈光狀態變化
+  useEffect(() => {
+    console.log('💡 燈光狀態更新:', {
+      lightsCount: lights.length,
+      lightsLoaded,
+      useFallback,
+      willShowFallback: useFallback || lights.length === 0,
+      willShowMainLights: lights.length > 0 && !useFallback
+    });
+  }, [lights.length, lightsLoaded, useFallback]);
   
   // 监测灯光渲染状态（只运行一次）
   return (
@@ -1498,7 +1523,8 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
         
         {/* 如果模型中没有灯光或燈光加載失敗，添加基础照明（使用配置文件） */}
         {/* 在燈光加載期間也顯示 fallback 燈光，避免畫面全黑 */}
-        {useFallback && (
+        {/* 確保：如果沒有主場景燈光（lights.length === 0）或 useFallback 為 true，則顯示 fallback 燈光 */}
+        {(useFallback || lights.length === 0) && (
           <>
             <ambientLight intensity={Chapter1LightConfig.fallbackLights.ambient} />
             <directionalLight 
