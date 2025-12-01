@@ -65,14 +65,14 @@
 }
 
 .keyboard-label-left {
-  top: 20vh;
+  top: 28vh;
   left: 50%;
   transform: translateX(calc(-50% - 25vw));
   gap: 4px;
 }
 
 .keyboard-label-center {
-  top: 18vh;
+  top: 26vh;
   left: 50%;
   transform: translateX(-50%);
   flex-direction: column;
@@ -80,7 +80,7 @@
 }
 
 .keyboard-label-right {
-  top: 20vh;
+  top: 28vh;
   left: 50%;
   transform: translateX(calc(-50% + 25vw));
   gap: 4px;
@@ -88,11 +88,11 @@
 
 /* 第二章專用：左右標籤位置調整 */
 .chapter-2 .keyboard-label-left {
-  top: 18vh;
+  top: 26vh;
 }
 
 .chapter-2 .keyboard-label-right {
-  top: 18vh;
+  top: 26vh;
 }
 
 /* 文字樣式 */
