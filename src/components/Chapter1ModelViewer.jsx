@@ -1120,6 +1120,10 @@ function InteractiveSpotLights({ spotLightsModel, selectedObject, isZoomed, inte
 function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLightsExtracted, onObjectsExtracted, selectedObject, isZoomed, pendingInstantZoomRef, initialUserZoomsRef }) {
   const rotationGroupRef = useRef(); // 用于包含所有需要旋转的元素
   const [lights, setLights] = useState([]);
+  const [lightsLoaded, setLightsLoaded] = useState(false); // 追蹤燈光是否已成功加載
+  const retryTimeoutRef = useRef(null); // 重試計時器
+  const maxRetriesRef = useRef(3); // 最大重試次數
+  const retryCountRef = useRef(0); // 當前重試次數
   
   // 加载主 GLB 模型（Hooks 必須在頂層調用）
   const { scene, animations, cameras } = useGLTF(modelPath);
@@ -1129,6 +1133,78 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
   
   // 加载交互 Spot 灯光 GLB 文件
   const spotLightsModel = useGLTF(spotLightsPath);
+  
+  // 提取燈光的函數
+  const extractLights = useCallback(() => {
+    if (!scene || !lightModel.scene || !spotLightsModel.scene) {
+      return [];
+    }
+    
+    // 强制更新场景的世界矩阵
+    lightModel.scene.updateMatrixWorld(true);
+    spotLightsModel.scene.updateMatrixWorld(true);
+    
+    const extractedLights = [];
+    
+    lightModel.scene.traverse((child) => {
+      // 检查是否为灯光对象（包括所有类型）
+      if (child.isLight) {
+        // 保存原始强度和名称
+        const originalIntensity = child.intensity;
+        const lightName = child.name || '未命名灯光';
+        
+        // 强制更新当前节点的世界矩阵
+        child.updateMatrixWorld(true);
+        
+        // 获取本地坐标
+        const localPosition = child.position.clone();
+        
+        // 计算世界坐标位置（考虑父节点的变换）
+        const worldPosition = new THREE.Vector3();
+        child.getWorldPosition(worldPosition);
+        
+        // 计算世界坐标旋转
+        const worldQuaternion = new THREE.Quaternion();
+        child.getWorldQuaternion(worldQuaternion);
+        const worldRotation = new THREE.Euler().setFromQuaternion(worldQuaternion);
+        
+        // 提取灯光信息并保存（使用世界坐标）
+        const lightInfo = {
+          name: lightName,
+          type: child.type,
+          color: child.color.clone(),
+          intensity: originalIntensity,
+          position: worldPosition.clone(),
+          rotation: worldRotation.clone(),
+          target: child.target ? (() => {
+            child.target.updateMatrixWorld(true);
+            const targetWorldPos = new THREE.Vector3();
+            child.target.getWorldPosition(targetWorldPos);
+            return targetWorldPos;
+          })() : null,
+          distance: child.distance,
+          angle: child.angle,
+          penumbra: child.penumbra,
+          decay: child.decay,
+          castShadow: child.castShadow
+        };
+        
+        // 如果是 RectAreaLight，保存额外属性
+        if (child.type === 'RectAreaLight') {
+          lightInfo.width = child.width;
+          lightInfo.height = child.height;
+        }
+        
+        extractedLights.push(lightInfo);
+        
+        // 禁用模型中的原始灯光，使用我们自己创建的灯光
+        child.intensity = 0;
+        child.visible = false;
+      }
+    });
+    
+    return extractedLights;
+  }, [scene, lightModel.scene, spotLightsModel.scene]);
   
   useEffect(() => {
     if (scene && lightModel.scene && spotLightsModel.scene) {
@@ -1211,67 +1287,45 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
       }
       
       // 提取模型中的灯光信息
-      const extractedLights = [];
-      
-      lightModel.scene.traverse((child) => {
-        // 检查是否为灯光对象（包括所有类型）
-        if (child.isLight) {
-          // 保存原始强度和名称
-          const originalIntensity = child.intensity;
-          const lightName = child.name || '未命名灯光';
-          
-          // 强制更新当前节点的世界矩阵
-          child.updateMatrixWorld(true);
-          
-          // 获取本地坐标
-          const localPosition = child.position.clone();
-          
-          // 计算世界坐标位置（考虑父节点的变换）
-          const worldPosition = new THREE.Vector3();
-          child.getWorldPosition(worldPosition);
-          
-          // 计算世界坐标旋转
-          const worldQuaternion = new THREE.Quaternion();
-          child.getWorldQuaternion(worldQuaternion);
-          const worldRotation = new THREE.Euler().setFromQuaternion(worldQuaternion);
-          
-          // 提取灯光信息并保存（使用世界坐标）
-          const lightInfo = {
-            name: lightName,
-            type: child.type,
-            color: child.color.clone(),
-            intensity: originalIntensity,
-            position: worldPosition.clone(),
-            rotation: worldRotation.clone(),
-            target: child.target ? (() => {
-              child.target.updateMatrixWorld(true);
-              const targetWorldPos = new THREE.Vector3();
-              child.target.getWorldPosition(targetWorldPos);
-              return targetWorldPos;
-            })() : null,
-            distance: child.distance,
-            angle: child.angle,
-            penumbra: child.penumbra,
-            decay: child.decay,
-            castShadow: child.castShadow
-          };
-          
-          // 如果是 RectAreaLight，保存额外属性
-          if (child.type === 'RectAreaLight') {
-            lightInfo.width = child.width;
-            lightInfo.height = child.height;
-          }
-          
-          extractedLights.push(lightInfo);
-          
-          // 禁用模型中的原始灯光，使用我们自己创建的灯光
-          child.intensity = 0;
-          child.visible = false;
-        }
-      });
+      const extractedLights = extractLights();
       
       if (extractedLights.length === 0) {
-        console.error('❌ 警告：没有提取到任何灯光！请检查 light.glb 文件');
+        console.warn(`⚠️ 警告：没有提取到任何灯光！重試次數: ${retryCountRef.current}/${maxRetriesRef.current}`);
+        
+        // 如果還沒達到最大重試次數，則重試
+        if (retryCountRef.current < maxRetriesRef.current) {
+          retryCountRef.current++;
+          // 清除之前的計時器
+          if (retryTimeoutRef.current) {
+            clearTimeout(retryTimeoutRef.current);
+          }
+          // 延遲重試（每次延遲時間遞增）
+          retryTimeoutRef.current = setTimeout(() => {
+            const retryLights = extractLights();
+            if (retryLights.length > 0) {
+              setLights(retryLights);
+              setLightsLoaded(true);
+              retryCountRef.current = 0; // 重置重試計數
+              console.log(`✅ 重試成功：成功提取 ${retryLights.length} 個燈光`);
+            } else if (retryCountRef.current >= maxRetriesRef.current) {
+              // 達到最大重試次數，使用 fallback 燈光
+              setLights([]);
+              setLightsLoaded(true); // 標記為已加載（使用 fallback）
+              console.warn('⚠️ 達到最大重試次數，將使用 fallback 燈光');
+            }
+          }, 500 * retryCountRef.current); // 遞增延遲：500ms, 1000ms, 1500ms
+        } else {
+          // 達到最大重試次數，使用 fallback 燈光
+          setLights([]);
+          setLightsLoaded(true);
+          console.warn('⚠️ 達到最大重試次數，將使用 fallback 燈光');
+        }
+      } else {
+        // 成功提取燈光
+        setLights(extractedLights);
+        setLightsLoaded(true);
+        retryCountRef.current = 0; // 重置重試計數
+        console.log(`✅ 成功提取 ${extractedLights.length} 個燈光`);
       }
       
       // 处理主场景模型中的材质自发光
@@ -1310,10 +1364,30 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
           });
         }
       });
-      
-      setLights(extractedLights);
     }
-  }, [scene, lightModel.scene, spotLightsModel.scene, cameras]); // 移除回调函数依赖，使用 useCallback 稳定它们
+  }, [scene, lightModel.scene, spotLightsModel.scene, cameras, extractLights]); // 添加 extractLights 依賴
+  
+  // 添加超時機制：如果燈光在 5 秒內沒有加載，使用 fallback
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      if (!lightsLoaded && lights.length === 0) {
+        console.warn('⚠️ 燈光加載超時，使用 fallback 燈光');
+        setLights([]);
+        setLightsLoaded(true);
+      }
+    }, 5000); // 5 秒超時
+    
+    return () => clearTimeout(timeout);
+  }, [lightsLoaded, lights.length]);
+  
+  // 清理重試計時器
+  useEffect(() => {
+    return () => {
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+      }
+    };
+  }, []);
   
   // 单独的 effect 来调用回调，避免循环依赖
   useEffect(() => {
@@ -1365,11 +1439,10 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
           lights.map((light, index) => (
             <Light key={`light-${index}-${light.name}`} lightData={light} isZoomed={isZoomed} />
           ))
-        ) : (
-          <group name="no-lights-placeholder" />
-        )}
+        ) : null}
         
-        {/* 如果模型中没有灯光，添加基础照明（使用配置文件） */}
+        {/* 如果模型中没有灯光或燈光加載失敗，添加基础照明（使用配置文件） */}
+        {/* 在燈光加載期間也顯示 fallback 燈光，避免畫面全黑 */}
         {lights.length === 0 && (
           <>
             <ambientLight intensity={Chapter1LightConfig.fallbackLights.ambient} />

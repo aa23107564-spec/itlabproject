@@ -49,11 +49,11 @@ const Chapter1LightConfig = {
     '檯燈燈罩': 0.15,  // 台灯灯罩
   },
   
-  // 后备灯光
+  // 后备灯光（當燈光模型加載失敗時使用）
   fallbackLights: {
-    ambient: 0,
-    directional: 0,
-    point: 0
+    ambient: 0.5,        // 環境光：提供基礎照明
+    directional: 0.8,    // 方向光：提供主要照明
+    point: 0.3           // 點光源：提供補充照明
   },
   
   // 调试模式
