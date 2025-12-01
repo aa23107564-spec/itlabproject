@@ -432,24 +432,24 @@ function Light({ lightData, isZoomed }) {
           }
         }, [lightData.target]);
         
-        return (
+      return (
           <>
-          <spotLight
+        <spotLight
             ref={spotRef}
-            name={lightData.name}
-            color={lightData.color}
-            intensity={intensity}
-            position={lightData.position.toArray()}
-            angle={lightData.angle}
-            penumbra={lightData.penumbra}
-            distance={lightData.distance}
-            decay={lightData.decay}
-            castShadow={lightData.castShadow}
-          />
+          name={lightData.name}
+          color={lightData.color}
+          intensity={intensity}
+          position={lightData.position.toArray()}
+          angle={lightData.angle}
+          penumbra={lightData.penumbra}
+          distance={lightData.distance}
+          decay={lightData.decay}
+          castShadow={lightData.castShadow}
+        />
             {/* Target 物件掛在同一層級，確保跟隨父層變換 */}
             <object3D ref={targetRef} />
           </>
-        );
+      );
       };
       return <SpotLightWithTarget />;
     case 'AmbientLight':
@@ -1123,7 +1123,7 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
   const [lightsLoaded, setLightsLoaded] = useState(false); // 追蹤燈光是否已成功加載
   const [useFallback, setUseFallback] = useState(true); // 初始時使用 fallback 燈光，避免畫面全黑
   const retryTimeoutRef = useRef(null); // 重試計時器
-  const maxRetriesRef = useRef(5); // 最大重試次數（增加到5次）
+  const maxRetriesRef = useRef(8); // 最大重試次數（增加到8次，應對 GitHub Pages 的網路延遲）
   const retryCountRef = useRef(0); // 當前重試次數
   const timeoutRef = useRef(null); // 超時計時器
   
@@ -1147,72 +1147,84 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
       return [];
     }
     
+    // 檢查 lightModel.scene 是否真的包含內容（防止部分加載）
+    if (!lightModel.scene.children || lightModel.scene.children.length === 0) {
+      console.warn('⚠️ extractLights: lightModel.scene 還沒有子物件，可能還在加載中');
+      return [];
+    }
+    
     // 强制更新场景的世界矩阵
     lightModel.scene.updateMatrixWorld(true);
     spotLightsModel.scene.updateMatrixWorld(true);
     
-    const extractedLights = [];
+      const extractedLights = [];
     let lightCount = 0;
-    
-    lightModel.scene.traverse((child) => {
-      // 检查是否为灯光对象（包括所有类型）
-      if (child.isLight) {
+    let totalTraversed = 0;
+      
+      lightModel.scene.traverse((child) => {
+        totalTraversed++;
+        // 检查是否为灯光对象（包括所有类型）
+        if (child.isLight) {
         lightCount++;
-        // 保存原始强度和名称
-        const originalIntensity = child.intensity;
-        const lightName = child.name || '未命名灯光';
+          // 保存原始强度和名称
+          const originalIntensity = child.intensity;
+          const lightName = child.name || '未命名灯光';
         
         // 强制更新当前节点的世界矩阵
         child.updateMatrixWorld(true);
         
         // 获取本地坐标
         const localPosition = child.position.clone();
-        
-        // 计算世界坐标位置（考虑父节点的变换）
-        const worldPosition = new THREE.Vector3();
-        child.getWorldPosition(worldPosition);
-        
-        // 计算世界坐标旋转
-        const worldQuaternion = new THREE.Quaternion();
-        child.getWorldQuaternion(worldQuaternion);
-        const worldRotation = new THREE.Euler().setFromQuaternion(worldQuaternion);
-        
-        // 提取灯光信息并保存（使用世界坐标）
-        const lightInfo = {
-          name: lightName,
-          type: child.type,
-          color: child.color.clone(),
-          intensity: originalIntensity,
-          position: worldPosition.clone(),
-          rotation: worldRotation.clone(),
-          target: child.target ? (() => {
+          
+          // 计算世界坐标位置（考虑父节点的变换）
+          const worldPosition = new THREE.Vector3();
+          child.getWorldPosition(worldPosition);
+          
+          // 计算世界坐标旋转
+          const worldQuaternion = new THREE.Quaternion();
+          child.getWorldQuaternion(worldQuaternion);
+          const worldRotation = new THREE.Euler().setFromQuaternion(worldQuaternion);
+          
+          // 提取灯光信息并保存（使用世界坐标）
+          const lightInfo = {
+            name: lightName,
+            type: child.type,
+            color: child.color.clone(),
+            intensity: originalIntensity,
+            position: worldPosition.clone(),
+            rotation: worldRotation.clone(),
+            target: child.target ? (() => {
             child.target.updateMatrixWorld(true);
-            const targetWorldPos = new THREE.Vector3();
-            child.target.getWorldPosition(targetWorldPos);
-            return targetWorldPos;
-          })() : null,
-          distance: child.distance,
-          angle: child.angle,
-          penumbra: child.penumbra,
-          decay: child.decay,
-          castShadow: child.castShadow
-        };
-        
-        // 如果是 RectAreaLight，保存额外属性
-        if (child.type === 'RectAreaLight') {
-          lightInfo.width = child.width;
-          lightInfo.height = child.height;
+              const targetWorldPos = new THREE.Vector3();
+              child.target.getWorldPosition(targetWorldPos);
+              return targetWorldPos;
+            })() : null,
+            distance: child.distance,
+            angle: child.angle,
+            penumbra: child.penumbra,
+            decay: child.decay,
+            castShadow: child.castShadow
+          };
+          
+          // 如果是 RectAreaLight，保存额外属性
+          if (child.type === 'RectAreaLight') {
+            lightInfo.width = child.width;
+            lightInfo.height = child.height;
+          }
+          
+          extractedLights.push(lightInfo);
+          
+          // 禁用模型中的原始灯光，使用我们自己创建的灯光
+          child.intensity = 0;
+          child.visible = false;
         }
-        
-        extractedLights.push(lightInfo);
-        
-        // 禁用模型中的原始灯光，使用我们自己创建的灯光
-        child.intensity = 0;
-        child.visible = false;
-      }
-    });
+      });
     
-    console.log(`🔍 extractLights: 在 lightModel.scene 中找到 ${lightCount} 個燈光物件，成功提取 ${extractedLights.length} 個燈光`);
+    console.log(`🔍 extractLights: 遍歷了 ${totalTraversed} 個物件，找到 ${lightCount} 個燈光物件，成功提取 ${extractedLights.length} 個燈光`);
+    
+    if (extractedLights.length === 0 && totalTraversed > 0) {
+      console.warn('⚠️ extractLights: 遍歷了物件但沒有找到任何燈光，可能燈光還在加載中或模型結構有變化');
+    }
     
     return extractedLights;
   }, [scene, lightModel.scene, spotLightsModel.scene]);
@@ -1314,8 +1326,10 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
           // 使用遞歸函數進行重試
           const attemptRetry = (attemptNumber) => {
             retryTimeoutRef.current = setTimeout(() => {
-              // 再次檢查場景是否已加載
-              if (scene && lightModel.scene && spotLightsModel.scene) {
+              // 再次檢查場景是否已加載，並確認 lightModel.scene 包含內容
+              if (scene && lightModel.scene && spotLightsModel.scene && 
+                  lightModel.scene.children && lightModel.scene.children.length > 0) {
+                console.log(`🔄 重試第 ${attemptNumber} 次：場景已加載，lightModel.scene 有 ${lightModel.scene.children.length} 個子物件`);
                 const retryLights = extractLights();
                 if (retryLights.length > 0) {
                   // 成功提取燈光
@@ -1343,6 +1357,12 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
                 }
               } else {
                 // 場景還沒加載完成，繼續重試
+                console.log(`🔄 重試第 ${attemptNumber} 次：場景還在加載中`, {
+                  scene: !!scene,
+                  lightModel: !!lightModel.scene,
+                  spotLightsModel: !!spotLightsModel.scene,
+                  lightModelChildren: lightModel.scene ? (lightModel.scene.children?.length || 0) : 0
+                });
                 if (retryCountRef.current < maxRetriesRef.current) {
                   retryCountRef.current++;
                   attemptRetry(attemptNumber + 1); // 遞歸調用
@@ -1354,7 +1374,7 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
                   console.warn('⚠️ 達到最大重試次數，將使用 fallback 燈光');
                 }
               }
-            }, 300 * attemptNumber); // 遞增延遲：300ms, 600ms, 900ms, 1200ms, 1500ms
+            }, 500 + (attemptNumber * 400)); // 遞增延遲：500ms, 900ms, 1300ms, 1700ms, 2100ms, 2500ms, 2900ms, 3300ms（應對 GitHub Pages 的網路延遲）
           };
           
           attemptRetry(retryCountRef.current);
@@ -1417,7 +1437,7 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
     }
   }, [scene, lightModel.scene, spotLightsModel.scene, cameras, extractLights]); // 添加 extractLights 依賴
   
-  // 添加超時機制：如果燈光在 3 秒內沒有加載，確保使用 fallback
+  // 添加超時機制：如果燈光在 10 秒內沒有加載，確保使用 fallback（考慮 GitHub Pages 的網路延遲）
   useEffect(() => {
     // 清除之前的超時計時器
     if (timeoutRef.current) {
@@ -1434,12 +1454,12 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
     timeoutRef.current = setTimeout(() => {
       // 再次檢查狀態，確保在超時時仍然沒有燈光
       if (!lightsLoaded || lights.length === 0) {
-        console.warn('⚠️ 燈光加載超時，確保使用 fallback 燈光');
+        console.warn('⚠️ 燈光加載超時（10秒），確保使用 fallback 燈光');
         setLights([]);
         setLightsLoaded(true);
         setUseFallback(true); // 確保使用 fallback
       }
-    }, 3000); // 3 秒超時
+    }, 10000); // 增加到 10 秒超時，應對 GitHub Pages 的網路延遲
     
     return () => {
       if (timeoutRef.current) {
@@ -1481,8 +1501,8 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
     <>
       {/* 旋转组 - 包含场景、交互物件、Spot 灯光和主场景灯光 */}
       <group ref={rotationGroupRef}>
-        <primitive object={scene} />
-        
+      <primitive object={scene} />
+      
         {/* 显示 interactive.glb 的场景（包含所有子物件 mesh） */}
         <primitive object={spotLightsModel.scene} />
         
@@ -1525,19 +1545,19 @@ function Model({ modelPath, lightPath, spotLightsPath, onCameraExtracted, onLigh
         {/* 在燈光加載期間也顯示 fallback 燈光，避免畫面全黑 */}
         {/* 確保：如果沒有主場景燈光（lights.length === 0）或 useFallback 為 true，則顯示 fallback 燈光 */}
         {(useFallback || lights.length === 0) && (
-          <>
-            <ambientLight intensity={Chapter1LightConfig.fallbackLights.ambient} />
-            <directionalLight 
-              position={[10, 10, 5]} 
-              intensity={Chapter1LightConfig.fallbackLights.directional} 
-              castShadow 
-            />
-            <pointLight 
-              position={[-10, -10, -5]} 
-              intensity={Chapter1LightConfig.fallbackLights.point} 
-            />
-          </>
-        )}
+        <>
+          <ambientLight intensity={Chapter1LightConfig.fallbackLights.ambient} />
+          <directionalLight 
+            position={[10, 10, 5]} 
+            intensity={Chapter1LightConfig.fallbackLights.directional} 
+            castShadow 
+          />
+          <pointLight 
+            position={[-10, -10, -5]} 
+            intensity={Chapter1LightConfig.fallbackLights.point} 
+          />
+        </>
+      )}
       </group>
       
       {/* 场景旋转和缩放控制 - 根据选中物件旋转整个组并处理放大动画 */}
@@ -3729,7 +3749,7 @@ useEffect(() => {
                 marginTop: '16px',
                 color: '#cccccc',
                 textAlign: 'center',
-                fontSize: '14px',
+          fontSize: '14px',
                 opacity: 0.8
               }}>
                 場景載入中...
@@ -3739,12 +3759,12 @@ useEffect(() => {
               <div style={{
                 marginTop: '16px',
                 color: '#FFD700',
-                textAlign: 'center',
+          textAlign: 'center',
                 fontSize: '14px',
                 opacity: 0.9
-              }}>
+        }}>
                 按下任意鍵繼續
-              </div>
+          </div>
             )}
             
             {/* 视觉效果：红色不规则色块覆盖层 */}
@@ -3913,15 +3933,15 @@ useEffect(() => {
       
       {/* 选中物件提示 - 根据放大状态显示不同内容 */}
       {interactiveObjects.length > 0 && selectedObjectName && !isZoomed && (
-        <div style={{
-          position: 'absolute',
-          bottom: '30px',
-          left: '50%',
-          transform: 'translateX(-50%)',
+      <div style={{
+        position: 'absolute',
+        bottom: '30px',
+        left: '50%',
+        transform: 'translateX(-50%)',
           width: 'auto',
           minWidth: '400px',
           maxWidth: '600px',
-          pointerEvents: 'none',
+        pointerEvents: 'none',
           zIndex: 100,
           animation: 'fadeIn 0.3s ease-in'
         }}>
@@ -3944,7 +3964,7 @@ useEffect(() => {
               {selectedObjectName === 'oldNote' && '舊筆記本'}
               {selectedObjectName === 'mokaPot' && '摩卡壺'}
               {selectedObjectName === 'sink' && '水槽'}
-            </div>
+      </div>
           </div>
         </div>
       )}
